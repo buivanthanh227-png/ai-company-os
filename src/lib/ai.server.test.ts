@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { postJson } from "./ai.server.ts";
+import { postJson, runAiChat } from "./ai.server.ts";
 
 const originalFetch = globalThis.fetch;
 const diagnostic = { provider: "gemini" as const, model: "test-model" };
@@ -131,4 +131,99 @@ test("retries invalid or empty JSON responses once", async () => {
   const result = await postJson("https://provider.test", {}, {}, diagnostic);
   assert.deepEqual(result, { ok: true });
   assert.equal(calls, 2);
+});
+
+
+test("does not return an empty Gemini answer; it falls back to OpenRouter", async () => {
+  const previousGemini = process.env.GEMINI_API_KEY;
+  const previousOpenRouter = process.env.OPENROUTER_API_KEY;
+  const previousModel = process.env.GEMINI_MODEL;
+  let geminiCalls = 0;
+  let openRouterCalls = 0;
+  process.env.GEMINI_API_KEY = "test-gemini-key";
+  process.env.OPENROUTER_API_KEY = "test-openrouter-key";
+  process.env.GEMINI_MODEL = "test-empty-model";
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.includes("generativelanguage.googleapis.com")) {
+      geminiCalls += 1;
+      return new Response(
+        JSON.stringify({ candidates: [{ content: { parts: [{ text: "   " }] } }] }),
+        { status: 200 },
+      );
+    }
+    if (url.includes("openrouter.ai")) {
+      openRouterCalls += 1;
+      return new Response(
+        JSON.stringify({ choices: [{ message: { content: "Fallback answer" } }] }),
+        { status: 200 },
+      );
+    }
+    throw new Error("Unexpected test URL");
+  };
+
+  try {
+    const reply = await runAiChat({ message: "Test empty response", history: [] });
+    assert.equal(reply.text, "Fallback answer");
+    assert.equal(reply.provider, "openrouter");
+    assert.equal(reply.fallbackUsed, true);
+    assert.equal(geminiCalls, 3);
+    assert.equal(openRouterCalls, 1);
+  } finally {
+    if (previousGemini === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = previousGemini;
+    if (previousOpenRouter === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = previousOpenRouter;
+    if (previousModel === undefined) delete process.env.GEMINI_MODEL;
+    else process.env.GEMINI_MODEL = previousModel;
+  }
+});
+
+test("documents that semantically off-topic non-empty answers are not yet detected", async () => {
+  const previousGemini = process.env.GEMINI_API_KEY;
+  const previousOpenRouter = process.env.OPENROUTER_API_KEY;
+  const previousModel = process.env.GEMINI_MODEL;
+  process.env.GEMINI_API_KEY = "test-gemini-key";
+  process.env.OPENROUTER_API_KEY = "test-openrouter-key";
+  process.env.GEMINI_MODEL = "test-off-topic-model";
+  let openRouterCalls = 0;
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.includes("generativelanguage.googleapis.com")) {
+      return new Response(
+        JSON.stringify({
+          candidates: [{ content: { parts: [{ text: "The weather is sunny." }] } }],
+        }),
+        { status: 200 },
+      );
+    }
+    if (url.includes("openrouter.ai")) {
+      openRouterCalls += 1;
+      return new Response(
+        JSON.stringify({ choices: [{ message: { content: "Fallback answer" } }] }),
+        { status: 200 },
+      );
+    }
+    throw new Error("Unexpected test URL");
+  };
+
+  try {
+    const reply = await runAiChat({
+      message: "Tính 2 + 2 và chỉ trả lời kết quả",
+      history: [],
+    });
+    // Current contract: the router validates transport/shape, not semantic relevance.
+    // This test deliberately records the gap; it does not change prompts or claim QC exists.
+    assert.equal(reply.text, "The weather is sunny.");
+    assert.equal(reply.provider, "gemini");
+    assert.equal(reply.fallbackUsed, false);
+    assert.equal(openRouterCalls, 0);
+  } finally {
+    if (previousGemini === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = previousGemini;
+    if (previousOpenRouter === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = previousOpenRouter;
+    if (previousModel === undefined) delete process.env.GEMINI_MODEL;
+    else process.env.GEMINI_MODEL = previousModel;
+  }
 });
