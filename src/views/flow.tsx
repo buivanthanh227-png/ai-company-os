@@ -39,6 +39,8 @@ export function CeoView() {
   const createMission = useOs((s) => s.createMission);
   const roster = useRoster();
   const [text, setText] = useState("");
+  const [conversationOpen, setConversationOpen] = useState(false);
+  const [visibleFrom, setVisibleFrom] = useState(messages.length);
   const [mode, setMode] = useState<"ai" | "local">("ai");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
@@ -94,13 +96,15 @@ export function CeoView() {
     const prompt = text.trim();
     if ((!prompt && !files.length) || busy) return;
     setText(""); setNotice("");
+    setVisibleFrom(messages.length);
+    setConversationOpen(true);
     const images = files.filter((f) => f.data).map((f) => ({ name: f.file.name, mimeType: f.file.type || "image/jpeg", data: (f.data ?? "").split(",")[1] ?? "" }));
     const textContent = files.filter((f) => f.content).map((f) => "\n\nNỘI DUNG TỆP " + f.file.name + ":\n" + f.content).join("");
     const labels = files.length ? "\n[Tệp đính kèm: " + files.map((f) => f.file.name).join(", ") + "]" : "";
     const message = (prompt || "Vui lòng xem tệp đính kèm.") + textContent;
     if (mode === "local") { sendLocalChat(message + labels); setFiles([]); return; }
     setBusy(true);
-    const history = messages.slice(-8).map((m) => ({ role: m.role === "chairman" ? "user" as const : "assistant" as const, content: m.text }));
+    const history = messages.slice(visibleFrom).slice(-8).map((m) => ({ role: m.role === "chairman" ? "user" as const : "assistant" as const, content: m.text }));
     const includeContext = /nhân sự|công ty|dự án|nhiệm vụ|công việc|giao việc|báo cáo|hạn mức|token|điều hành|trạng thái hệ thống/i.test(prompt);
     const context = [
       "Nhân sự: " + roster.length + "; đang hoạt động: " + roster.filter((p) => p.status === "active").length + ".",
@@ -132,7 +136,7 @@ export function CeoView() {
   return (
     <section className="flex min-h-[calc(100dvh-9rem)] flex-1 flex-col">
       <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col">
-        {messages.length === 0 ? (
+        {!conversationOpen || messages.length === visibleFrom ? (
           <div className="my-auto px-3 py-12 text-center">
             <div className="mx-auto mb-6 grid size-16 place-items-center rounded-3xl border border-blue-100 bg-blue-50 text-blue-600"><MessagesSquare className="size-8" /></div>
             <h1 className="text-2xl font-semibold tracking-tight text-fg sm:text-3xl">Chào Chủ tịch Bùi Văn Thanh,</h1>
@@ -140,7 +144,7 @@ export function CeoView() {
           </div>
         ) : (
           <div className="flex flex-1 flex-col gap-6 pb-8">
-            {messages.map((m) => (
+            {messages.slice(visibleFrom).map((m) => (
               <article key={m.id} className={m.role === "ceo" ? "flex gap-3" : "ml-auto max-w-[88%] rounded-2xl bg-subtle px-4 py-3"}>
                 {m.role === "ceo" ? <div className="grid size-8 shrink-0 place-items-center rounded-full border border-line bg-elevated text-accent"><MessagesSquare className="size-4" /></div> : null}
                 <div className="min-w-0 flex-1">
