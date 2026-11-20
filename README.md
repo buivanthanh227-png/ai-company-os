@@ -7,16 +7,16 @@ Danh mục kiểm tra ngày 2026-11-20. Hạn mức token công khai mà phiên 
 ## Đang chạy thật
 
 - Toàn bộ menu, tìm kiếm, lọc, hồ sơ, sơ đồ tổ chức, bảng điều hành bên phải.
-- Bộ chấm điểm và phân công. Mỗi kỹ năng được tính riêng.
-- Chuyển giao khi hết hạn mức, timeout, rate limit, lỗi API, lỗi xác thực.
-- Hàng đợi khi không còn người. Ngữ cảnh việc không bị xóa.
+- Bộ chấm điểm và phân công cục bộ; chuyển giao mô phỏng khi hết hạn mức, timeout, rate limit, lỗi API hoặc lỗi xác thực.
 - Lưu trên trình duyệt, xuất Excel, CSV và JSON.
+- Backend gateway Gemini Router đã được bổ sung trong Giai đoạn 2: Gemini chính, OpenRouter dự phòng; server functions yêu cầu xác thực.
 
-## Đang mô phỏng
+## Chưa được xác minh trên môi trường production
 
-- Chưa gọi API của ChatGPT hay nhà cung cấp nào.
-- Khóa dán trong Cài đặt chỉ nằm trên máy người dùng, không gửi đi.
-- Thanh ngân sách 0–100 là thước nội bộ, không phải token nhà cung cấp.
+- Chưa có bằng chứng Vercel production đã được cấu hình biến môi trường và gọi thành công Gemini/OpenRouter.
+- Chat CEO và lập kế hoạch/phân công vẫn dùng logic cục bộ; chưa chuyển hội thoại sang AI.
+- Chưa có hàng đợi bền, số liệu token/chi phí thực tế hoặc rate limit dùng chung giữa các serverless instances.
+- Thanh ngân sách 0–100 vẫn là thước nội bộ, không phải token nhà cung cấp.
 - Hạn mức chính thức để «chưa xác minh» nếu không có số công khai đã kiểm ngày 2026-11-20.
 
 ## Cách dùng
@@ -38,7 +38,7 @@ npm run dev
 
 `npm run build` tạo bản máy chủ. Bản GitHub Pages dùng biến `PAGES_BASE`, xem [docs/github-pages.md](docs/github-pages.md).
 
-Không dán khóa thật vào mã nguồn. Ô khóa trong Cài đặt chỉ ở lại máy người dùng.
+Không dán khóa thật vào mã nguồn hoặc trình duyệt. Giai đoạn 2 đọc khóa từ Vercel Environment Variables; xem [docs/phase-2-gemini-router.md](docs/phase-2-gemini-router.md).
 
 ## Giai đoạn 2
 
