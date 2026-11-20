@@ -21,6 +21,9 @@ Thiết lập trong Project → Settings → Environment Variables. Không đặ
 | `OPENROUTER_MODEL` | Không | Mặc định `openrouter/free` |
 | `BETTER_AUTH_URL` | Khi bật đăng nhập | URL triển khai chính thức, ví dụ `https://your-domain.vercel.app` |
 | `BETTER_AUTH_SECRET` | Khi bật đăng nhập | Chuỗi bí mật ngẫu nhiên, tối thiểu 32 ký tự |
+| `GROK_AUTH_ISSUER` | Khi bật đăng nhập production | URL issuer của OAuth broker |
+| `GROK_AUTH_CLIENT_ID` | Khi bật đăng nhập production | Client ID riêng của ứng dụng |
+| `GROK_AUTH_CLIENT_SECRET` | Khi bật đăng nhập production | Client secret riêng của ứng dụng |
 | `DATABASE_URL` | Khi dùng Neon/Postgres | Connection string PostgreSQL |
 | `VITE_AUTH_ENABLED` | Có trong môi trường production | Đặt `true` và cấu hình thông tin OAuth broker theo `src/lib/auth/server.ts` |
 
@@ -39,7 +42,7 @@ Sau khi thêm biến môi trường, redeploy để serverless functions nhận 
 ## Điều kiện để gọi AI thật
 
 - Deploy ứng dụng trên Vercel bằng cấu hình server build, không phải bản GitHub Pages tĩnh.
-- Bật đăng nhập và cấu hình Better Auth theo biến môi trường ở trên. Nếu `DATABASE_URL` được đặt nhưng xác thực bị tắt, middleware chủ động từ chối request.
+- Bật đăng nhập và cấu hình Better Auth cùng OAuth broker (`GROK_AUTH_ISSUER`, `GROK_AUTH_CLIENT_ID`, `GROK_AUTH_CLIENT_SECRET`). Nếu `DATABASE_URL` được đặt nhưng xác thực bị tắt, middleware chủ động từ chối request.
 - Cấu hình ít nhất một API key ở Vercel.
 - Mở Cài đặt và chạy phép thử kết nối AI. Kết quả phải trả về provider/model thật.
 
