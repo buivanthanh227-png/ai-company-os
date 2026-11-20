@@ -18,7 +18,7 @@ Thiết lập trong Project → Settings → Environment Variables. Không đặ
 | Biến | Bắt buộc | Giá trị |
 |---|---|---|
 | `GEMINI_API_KEY` | Có nếu dùng Gemini chính | API key tạo từ Google AI Studio |
-| `GEMINI_MODEL` | Không | Mặc định `gemini-2.5-flash-lite` |
+| `GEMINI_MODEL` | Không | Mặc định `gemini-3.5-flash-lite`; model dự phòng `gemini-3.8-flash` |
 | `OPENROUTER_API_KEY` | Khuyến nghị | API key OpenRouter để dự phòng |
 | `OPENROUTER_MODEL` | Không | Mặc định `openrouter/free` |
 | `BETTER_AUTH_URL` | Khi bật đăng nhập | URL triển khai chính thức, ví dụ `https://your-domain.vercel.app` |
@@ -37,14 +37,15 @@ Sau khi thêm biến môi trường, redeploy để serverless functions nhận 
 2. `authMiddleware` xác minh phiên; không tin user ID do client tự gửi.
 3. Server kiểm tra dữ liệu đầu vào và giới hạn độ dài.
 4. Gemini được gọi trước bằng header `x-goog-api-key`.
-5. Khi Gemini timeout, lỗi mạng, 408, 409, 429 hoặc 5xx, gateway mới thử OpenRouter.
+5. Gemini thử `GEMINI_MODEL` (nếu có), sau đó `gemini-3.5-flash-lite` và `gemini-3.8-flash`. Lỗi 404 chuyển model; lỗi 400/401/403 dừng thử Gemini và chuyển OpenRouter; lỗi mạng, timeout, 408, 409, 429 hoặc 5xx tiếp tục cơ chế dự phòng.
 6. OpenRouter dùng endpoint tương thích OpenAI và model `openrouter/free` mặc định.
 7. API key và nội dung lỗi thô của nhà cung cấp không được trả về client.
 
 ## Điều kiện để gọi AI thật
 
 - Deploy ứng dụng trên Vercel bằng cấu hình server build, không phải bản GitHub Pages tĩnh.
-- Bật đăng nhập và cấu hình Better Auth cùng OAuth broker (`GROK_AUTH_ISSUER`, `GROK_AUTH_CLIENT_ID`, `GROK_AUTH_CLIENT_SECRET`). Nếu `DATABASE_URL` được đặt nhưng xác thực bị tắt, middleware chủ động từ chối request.
+- Với chế độ nhiều người dùng: bật đăng nhập và cấu hình Better Auth cùng OAuth broker (`GROK_AUTH_ISSUER`, `GROK_AUTH_CLIENT_ID`, `GROK_AUTH_CLIENT_SECRET`). Nếu `DATABASE_URL` được đặt nhưng xác thực bị tắt, middleware chủ động từ chối request.
+- Với chế độ một chủ sở hữu: chỉ dùng khi Vercel Deployment Protection/SSO vẫn bật; đặt `VITE_AUTH_ENABLED=false` và `SINGLE_USER_MODE=true` ở Production/Preview. Mã xác thực chỉ cho phép chế độ này trên deployment Vercel production/preview.
 - Cấu hình ít nhất một API key ở Vercel.
 - Mở Cài đặt và chạy phép thử kết nối AI. Kết quả phải trả về provider/model thật.
 
