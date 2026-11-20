@@ -16,7 +16,7 @@ const SKILL_WORDS: [RegExp, SkillKey][] = [
   [/giao diện|\bui\b|frontend/, "U"],
   [/kiểm thử|test/, "E"],
   [/bảo mật|security/, "S"],
-  [/hình ảnh|hình\b|logo|poster/, "H"],
+  [/hình ảnh|hình\b|ảnh|logo|poster|xóa vật thể|xoá vật thể|xóa nền|xoá nền|chỉnh ảnh/, "H"],
   [/video|clip|phim/, "V"],
   [/giọng|âm thanh|nhạc|lồng tiếng/, "A"],
   [/dịch/, "D"],
@@ -41,7 +41,7 @@ export function interpret(text: string): Intent {
   if (/khôi phục|kích hoạt lại|trở lại danh sách/.test(t)) return { type: "restore" };
   if (/hết hạn|cắt hạn|ngắt hạn/.test(t)) return { type: "exhaust" };
   if (/ai nào|ai giỏi|nhân sự nào|chọn ai|ứng viên/.test(t)) return { type: "find" };
-  if (/giao việc|nhiệm vụ|hãy |làm |sửa |xây |viết |dịch |tạo |thiết kế/.test(t) || raw.length > 48) {
+  if (/giao việc|nhiệm vụ|hãy |làm |sửa |xóa |xoá |chỉnh |tẩy |xây |viết |dịch |tạo |thiết kế|ghép |tách /.test(t) || raw.length > 48) {
     return { type: "mission", title: raw.slice(0, 90), brief: raw, kind: detectKind(raw) };
   }
   return { type: "help" };
@@ -68,6 +68,7 @@ export function helpText() {
   return [
     "Tôi nhận lệnh tiếng Việt và thực hiện trên dữ liệu của hệ thống, không gọi API ngoài.",
     "• Giao một việc bằng câu bình thường, ví dụ: Sửa ứng dụng học tiếng Trung, kẹt bài HSK 1.",
+    "• Với ảnh: ghi rõ thao tác như xóa vật thể, xóa nền hoặc chỉnh màu. CEO sẽ tự lập các pha và giao AI phù hợp.",
     "• «báo cáo» — tình hình nhân sự và việc.",
     "• «hàng đợi» — việc chưa có người.",
     "• «ai giỏi kiểm thử» — xếp hạng theo một kỹ năng.",
@@ -81,7 +82,7 @@ export function reportText(roster: LiveStaff[], tasks: Task[]) {
   const low = roster.filter((person) => presenceOf(person) === "degraded").length;
   const empty = roster.filter((person) => presenceOf(person) === "quota_exhausted").length;
   const wait = roster.filter((person) => presenceOf(person) === "standby").length;
-  const open = tasks.filter((task) => task.status === "queued" || task.status === "assigned" || task.status === "running" || task.status === "review");
+  const open = tasks.filter((task) => task.status === "queued" || task.status === "assigned" || task.status === "handed_off" || task.status === "running" || task.status === "review");
   const queued = tasks.filter((task) => task.status === "queued");
   const done = tasks.filter((task) => task.status === "done").length;
   const lines = [
