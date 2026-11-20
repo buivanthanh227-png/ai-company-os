@@ -30,7 +30,7 @@ export type PhaseTemplate = {
   detail: string;
 };
 
-const OPEN: TaskStatus[] = ["queued", "assigned", "running", "review"];
+const OPEN: TaskStatus[] = ["queued", "assigned", "handed_off", "running", "review"];
 
 export function isOpen(status: TaskStatus) {
   return OPEN.includes(status);
@@ -128,10 +128,10 @@ export function phasesFor(kind: MissionKind, brief: string): PhaseTemplate[] {
   }
   if (kind === "image") {
     return [
-      { phase: "A", title: "Chốt brief hình", skill: "W", detail: withBrief("Mô tả bố cục, chữ và điều cấm.") },
-      { phase: "B", title: "Tạo phương án", skill: "H", detail: withBrief("Ra các hướng hình khác nhau.") },
-      { phase: "C", title: "Chỉnh biến thể", skill: "H", detail: withBrief("Siết đúng brief, không đổi mục tiêu.") },
-      { phase: "D", title: "Soát dùng được", skill: "S", detail: withBrief("Ghi rủi ro bản quyền và thương hiệu.") },
+      { phase: "A", title: "Phân tích ảnh và yêu cầu", skill: "H", detail: withBrief("Xác định vùng cần sửa, phần phải giữ nguyên và tiêu chí ảnh đầu ra.") },
+      { phase: "B", title: "Chỉnh sửa ảnh gốc", skill: "H", detail: withBrief("Thực hiện chỉnh sửa trực tiếp trên ảnh gốc, không chỉ tạo ảnh mới.") },
+      { phase: "C", title: "Soát chất lượng ảnh", skill: "H", detail: withBrief("Kiểm tra vùng đã chỉnh, ánh sáng, bóng, viền và tính tự nhiên.") },
+      { phase: "D", title: "Nghiệm thu và báo cáo", skill: "W", detail: withBrief("Nêu công cụ, phần đã sửa, phần còn lỗi và bàn giao tệp ảnh đầu ra.") },
     ];
   }
   if (kind === "video") {
@@ -205,7 +205,13 @@ export function planTasks(input: {
   const used: string[] = [];
   return phases.map((phase) => {
     const ranked = rankForSkill(input.roster, phase.skill, used);
-    const pick = ranked.find((r) => r.eligible) ?? null;
+    const editPhase = input.kind === "image" && (phase.phase === "B" || phase.phase === "C");
+    const pick = ranked.find((row) => {
+      if (!row.eligible) return false;
+      if (!editPhase) return true;
+      const person = input.roster.find((staff) => staff.id === row.id);
+      return person?.fileEdit === "yes";
+    }) ?? null;
     if (pick) used.push(pick.id);
     const lines = [
       input.brief.trim(),
