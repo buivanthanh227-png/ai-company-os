@@ -179,13 +179,14 @@ export function matchesApproval(
 ): boolean {
   return Boolean(
     evidence &&
-    evidence.approvalId.trim() &&
-    evidence.taskId === task.id &&
-    evidence.taskRevision === task.revision &&
-    evidence.taskHash === task.contentHash &&
-    evidence.approvedBy.trim() &&
+    typeof evidence.approvalId === "string" && evidence.approvalId.trim() &&
+    typeof evidence.taskId === "string" && evidence.taskId === task.id &&
+    Number.isInteger(evidence.taskRevision) && evidence.taskRevision === task.revision &&
+    typeof evidence.taskHash === "string" && evidence.taskHash === task.contentHash &&
+    typeof evidence.approvedBy === "string" && evidence.approvedBy.trim() &&
     evidence.scope === "execute" &&
-    !evidence.revokedAt &&
+    (evidence.revokedAt === undefined || evidence.revokedAt === null) &&
+    typeof evidence.approvedAt === "string" &&
     isValidTimestamp(evidence.approvedAt, nowMs)
   );
 }
@@ -197,12 +198,13 @@ export function matchesReview(
 ): boolean {
   return Boolean(
     evidence &&
-    evidence.reviewId.trim() &&
-    evidence.taskId === task.id &&
-    evidence.taskRevision === task.revision &&
-    evidence.taskHash === task.contentHash &&
-    evidence.reviewerId.trim() &&
+    typeof evidence.reviewId === "string" && evidence.reviewId.trim() &&
+    typeof evidence.taskId === "string" && evidence.taskId === task.id &&
+    Number.isInteger(evidence.taskRevision) && evidence.taskRevision === task.revision &&
+    typeof evidence.taskHash === "string" && evidence.taskHash === task.contentHash &&
+    typeof evidence.reviewerId === "string" && evidence.reviewerId.trim() &&
     evidence.verdict === "accepted" &&
+    typeof evidence.reviewedAt === "string" &&
     isValidTimestamp(evidence.reviewedAt, nowMs)
   );
 }
@@ -215,7 +217,14 @@ export function isTaskDispatchable(
   nowMs = Date.now(),
 ): boolean {
   if (task.status !== "queued") return false;
-  if (!Array.isArray(task.dependsOn) || !Number.isInteger(task.revision) || task.revision < 1 || !task.contentHash) return false;
+  if (
+    typeof task.id !== "string" || !task.id ||
+    typeof task.approvalRequired !== "boolean" || typeof task.reviewRequired !== "boolean" ||
+    !Array.isArray(task.dependsOn) || !task.dependsOn.every((id) => typeof id === "string") ||
+    !Number.isInteger(task.revision) || task.revision < 1 ||
+    typeof task.contentHash !== "string" || !task.contentHash
+  ) return false;
+  if (!Array.isArray(allTasks) || allTasks.some((item) => !item || typeof item.id !== "string")) return false;
   if (new Set(allTasks.map((item) => item.id)).size !== allTasks.length) return false;
   if (!allTasks.some((item) => item.id === task.id)) return false;
   if (task.approvalRequired && !approvals.some((approval) => matchesApproval(task, approval, nowMs))) return false;
@@ -255,15 +264,19 @@ const TRANSITIONS: Record<OrchestratorStatus, readonly OrchestratorStatus[]> = {
   cancelled: [],
 };
 
+function hasExplicitPolicy(policy?: TransitionPolicy): policy is TransitionPolicy {
+  return Boolean(policy && typeof policy.approvalRequired === "boolean" && typeof policy.reviewRequired === "boolean");
+}
+
 function policyAllows(current: OrchestratorStatus, next: OrchestratorStatus, policy?: TransitionPolicy): boolean {
-  if (current === "planned" && next === "queued") return Boolean(policy && !policy.approvalRequired);
+  if (current === "planned" && next === "queued") return Boolean(hasExplicitPolicy(policy) && !policy.approvalRequired);
   if (current === "needs_approval" && next === "queued") {
-    return Boolean(policy?.task && policy.approvalRequired && matchesApproval(policy.task, policy.approval, policy.nowMs));
+    return Boolean(hasExplicitPolicy(policy) && policy.task && policy.approvalRequired && matchesApproval(policy.task, policy.approval, policy.nowMs));
   }
-  if (current === "execution_succeeded" && next === "succeeded") return Boolean(policy && !policy.reviewRequired);
-  if (current === "execution_succeeded" && next === "review_required") return Boolean(policy?.reviewRequired);
+  if (current === "execution_succeeded" && next === "succeeded") return Boolean(hasExplicitPolicy(policy) && !policy.reviewRequired);
+  if (current === "execution_succeeded" && next === "review_required") return Boolean(hasExplicitPolicy(policy) && policy.reviewRequired);
   if (current === "review_required" && next === "succeeded") {
-    return Boolean(policy?.task && policy.reviewRequired && matchesReview(policy.task, policy.review, policy.nowMs));
+    return Boolean(hasExplicitPolicy(policy) && policy.task && policy.reviewRequired && matchesReview(policy.task, policy.review, policy.nowMs));
   }
   return true;
 }
