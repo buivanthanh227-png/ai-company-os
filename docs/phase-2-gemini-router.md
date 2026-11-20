@@ -61,3 +61,31 @@ Sau khi thêm biến môi trường, redeploy để serverless functions nhận 
 - Fallback là chuyển provider khi lỗi phù hợp; không bảo đảm OpenRouter luôn có model miễn phí khả dụng.
 - Free tier của OpenRouter có giới hạn riêng; model miễn phí có thể bị giới hạn bởi nhà cung cấp. Không xem đây là SLA.
 - AI Chat chưa có quyền gọi công cụ để tự tạo nhiệm vụ, thay đổi trạng thái hoặc commit mã; các hành động đó vẫn cần quy trình riêng.
+
+## Giai đoạn 3 — dữ liệu bền vững và chế độ cá nhân
+
+- Bảng `app_state` lưu snapshot workspace theo user id trong Postgres.
+- Trình duyệt hydrate cache trước, sau đó lấy snapshot máy chủ; mọi thay đổi tiếp theo được debounce và đồng bộ về máy chủ.
+- API lưu/đọc snapshot dùng `authMiddleware`, giới hạn cấu trúc dữ liệu và kích thước tối đa 1 MB.
+- Với bản cá nhân một chủ sở hữu, có thể dùng Vercel Deployment Protection (SSO) làm cổng truy cập: đặt `VITE_AUTH_ENABLED=false`, `SINGLE_USER_MODE=true`; chỉ cho phép trên Vercel production/preview. Không gắn custom domain không có bảo vệ SSO.
+- Nếu cần nhiều người dùng, không bật single-owner mode; cấu hình Better Auth + OAuth broker riêng cho ứng dụng.
+
+### Kết nối Neon
+
+1. Trong Vercel, mở Marketplace → Neon và cài resource cho project `ai-company-os`.
+2. Chọn region gần function region `iad1` (US East / AWS us-east-1 nếu được cung cấp).
+3. Kết nối ít nhất môi trường Production; bật Preview nếu muốn thử PR với database branch riêng.
+4. Neon integration phải tự thêm `DATABASE_URL` vào project. Không sao chép connection string vào Git hoặc chat.
+5. Sau khi kết nối, redeploy để `npm run build` chạy migration `migrations/0001_app_state.sql`.
+
+### Biến môi trường cho bản cá nhân
+
+| Biến | Giá trị |
+|---|---|
+| `VITE_AUTH_ENABLED` | `false` |
+| `SINGLE_USER_MODE` | `true` |
+| `DATABASE_URL` | Do Neon integration tự cấp |
+| `GEMINI_API_KEY` | Khóa Google AI Studio |
+| `OPENROUTER_API_KEY` | Khóa OpenRouter |
+
+Giữ Vercel Deployment Protection ở trạng thái SSO enabled cho các URL `.vercel.app`; không mở website qua custom domain không được bảo vệ.
