@@ -113,6 +113,8 @@ export function CeoView() {
     const textContent = files.filter((f) => f.content).map((f) => "\n\nNỘI DUNG TỆP " + f.file.name + ":\n" + f.content).join("");
     const labels = files.length ? "\n[Tệp đính kèm: " + files.map((f) => f.file.name).join(", ") + "]" : "";
     const message = (prompt || "Vui lòng xem tệp đính kèm.") + textContent;
+    const missionIntent = interpret(prompt || "");
+    const missionBrief = (prompt || "Vui lòng xử lý tệp đính kèm.") + labels;
     if (mode === "local") { sendLocalChat(message + labels); setFiles([]); return; }
     setBusy(true);
     // Show the user's message immediately; network latency should only affect the assistant reply indicator.
@@ -128,6 +130,10 @@ export function CeoView() {
       const { sendAiMessage } = await import("@/lib/ai.functions");
       const result = await sendAiMessage({ data: { message, history, context: includeContext ? context : undefined, attachments: images } });
       appendChatMessage("ceo", result.text, result.provider);
+      if (missionIntent.type === "mission") {
+        const project = projects.find((item) => item.name === "Việc từ phòng CEO");
+        createMission({ projectId: project?.id ?? "new", projectName: "Việc từ phòng CEO", title: missionIntent.title, brief: missionBrief, kind: missionIntent.kind, priority: "P1" });
+      }
       setFiles([]);
       setNotice(result.provider === "gemini" ? "Đã trả lời bằng Google Gemini." : "Đã trả lời bằng OpenRouter" + (result.fallbackUsed ? " (dự phòng)." : "."));
     } catch (error) {
@@ -140,7 +146,11 @@ export function CeoView() {
             ? "Gemini và OpenRouter đều chưa phản hồi. Vui lòng thử lại sau."
             : "Hiện chưa kết nối được nhà cung cấp AI. Yêu cầu chưa được xử lý.";
       appendChatMessage("ceo", answer, "local");
-      setNotice("Kết nối AI chưa sẵn sàng.");
+      if (missionIntent.type === "mission") {
+        const project = projects.find((item) => item.name === "Việc từ phòng CEO");
+        createMission({ projectId: project?.id ?? "new", projectName: "Việc từ phòng CEO", title: missionIntent.title, brief: missionBrief, kind: missionIntent.kind, priority: "P1" });
+      }
+      setNotice("Kết nối AI chưa sẵn sàng; CEO vẫn đã lập luồng giao việc nội bộ.");
     } finally { setBusy(false); }
   }
 
