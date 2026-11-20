@@ -63,7 +63,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  */
 export function validateTaskPlan(value: unknown, maxTasks = 8): ValidationResult {
   const errors: string[] = [];
-  const requestedCap = Number.isFinite(maxTasks) ? Math.floor(maxTasks) : 8;\n  const cap = Math.max(1, Math.min(20, requestedCap));
+  const requestedCap = Number.isFinite(maxTasks) ? Math.floor(maxTasks) : 8;
+  const cap = Math.max(1, Math.min(20, requestedCap));
 
   if (!isRecord(value)) return { valid: false, errors: ["Plan must be an object."] };
   if (value.schemaVersion !== 1) errors.push("schemaVersion must equal 1.");
