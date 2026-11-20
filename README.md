@@ -14,7 +14,7 @@ Danh mục kiểm tra ngày 2026-11-20. Hạn mức token công khai mà phiên 
 ## Chưa được xác minh trên môi trường production
 
 - Chưa có bằng chứng Vercel production đã được cấu hình biến môi trường và gọi thành công Gemini/OpenRouter.
-- Chat CEO và lập kế hoạch/phân công vẫn dùng logic cục bộ; chưa chuyển hội thoại sang AI.
+- Chat CEO đã có chế độ AI Router gọi Gemini/OpenRouter qua server; chế độ lệnh nội bộ cũ vẫn còn. AI Chat chưa tự phân công hoặc thay đổi dữ liệu.
 - Chưa có hàng đợi bền, số liệu token/chi phí thực tế hoặc rate limit dùng chung giữa các serverless instances.
 - Thanh ngân sách 0–100 vẫn là thước nội bộ, không phải token nhà cung cấp.
 - Hạn mức chính thức để «chưa xác minh» nếu không có số công khai đã kiểm ngày 2026-11-20.
