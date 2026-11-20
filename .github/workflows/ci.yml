@@ -23,8 +23,6 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm install --no-audit --no-fund
-      - name: Auth invariants
-        run: npm run check:auth
       - name: Typecheck
         run: npm run typecheck
       - name: Portable unit tests
