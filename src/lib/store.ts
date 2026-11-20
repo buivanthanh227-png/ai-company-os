@@ -51,6 +51,7 @@ type OsState = Snapshot & {
   appendChatMessage: (role: ChatMessage["role"], text: string, source?: ChatMessage["source"]) => void;
   affectTask: (taskId: string, reason: FailReason) => void;
   setTaskStatus: (taskId: string, status: Task["status"]) => void;
+  saveTaskResult: (taskId: string, result: string) => void;
   exhaustStaff: (id: string) => void;
   restoreStaff: (id: string, status?: "active" | "standby" | "offline") => void;
   setBudget: (id: string, budget: number) => void;
@@ -292,15 +293,17 @@ export const useOs = create<OsState>()(
         let staffOver = state.staffOver;
         if (status === "done") staffOver = bump(staffOver, current.assigneeId, "ok");
         if (status === "failed") staffOver = bump(staffOver, current.assigneeId, "bad");
-        const progress = status === "done" ? 100 : status === "review" ? Math.max(current.progress, 80) : status === "running" ? Math.max(current.progress, 10) : current.progress;
+        const progress = status === "done" ? 100 : status === "review" ? Math.max(current.progress, 90) : status === "handed_off" ? Math.max(current.progress, 20) : status === "running" ? Math.max(current.progress, 10) : current.progress;
         const text =
           status === "done"
             ? "Đánh dấu hoàn thành. Ngữ cảnh được giữ trong hồ sơ việc."
             : status === "failed"
               ? "Đánh dấu thất bại và trừ tỷ lệ thành công của người nhận."
-              : status === "review"
-                ? "Chuyển sang bước soát."
-                : "Bắt đầu thực hiện.";
+              : status === "handed_off"
+                ? "Chủ tịch xác nhận đã chuyển yêu cầu cho AI bên ngoài. Đang chờ kết quả; hệ thống chưa tự gọi AI đó."
+                : status === "review"
+                  ? "Đã nhận kết quả và chuyển sang bước soát."
+                  : "Bắt đầu thực hiện.";
         const updated: Task = {
           ...current,
           status,
@@ -313,6 +316,28 @@ export const useOs = create<OsState>()(
           tasks: state.tasks.map((task) => (task.id === taskId ? updated : task)),
           activity: pushActivity(state.activity, `${current.title}: ${text}`, status === "done" ? "ok" : status === "failed" ? "warn" : "info", at),
           notice: text,
+        });
+      },
+      saveTaskResult: (taskId, result) => {
+        const clean = result.trim().slice(0, 12000);
+        if (!clean) return;
+        const at = nowIso();
+        const state = get();
+        const current = state.tasks.find((task) => task.id === taskId);
+        if (!current) return;
+        const text = "Đã nhận nội dung kết quả từ Chủ tịch; chuyển sang bước CEO kiểm tra.";
+        const updated: Task = {
+          ...current,
+          result: clean,
+          status: "review",
+          progress: Math.max(current.progress, 90),
+          updatedAt: at,
+          history: [...current.history, { at, text }],
+        };
+        set({
+          tasks: state.tasks.map((task) => task.id === taskId ? updated : task),
+          activity: pushActivity(state.activity, `${current.title}: ${text}`, "info", at),
+          notice: "Đã lưu kết quả. Nhiệm vụ chuyển sang soát xét.",
         });
       },
       exhaustStaff: (id) => {
