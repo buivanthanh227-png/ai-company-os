@@ -48,6 +48,7 @@ type OsState = Snapshot & {
   }) => string;
   assignDirect: (skill: SkillKey, title: string) => void;
   sendChat: (text: string) => void;
+  appendChatMessage: (role: ChatMessage["role"], text: string, source?: ChatMessage["source"]) => void;
   affectTask: (taskId: string, reason: FailReason) => void;
   setTaskStatus: (taskId: string, status: Task["status"]) => void;
   exhaustStaff: (id: string) => void;
@@ -218,6 +219,10 @@ export const useOs = create<OsState>()(
           notice: task.history[0]!.text,
         });
       },
+      appendChatMessage: (role, text, source = role === "ceo" ? "local" : undefined) => {
+        const message: ChatMessage = { id: nid("MSG"), at: nowIso(), role, text, source };
+        set({ messages: [...get().messages, message].slice(-100) });
+      },
       sendChat: (text) => {
         const trimmed = text.trim();
         if (!trimmed) return;
@@ -254,7 +259,7 @@ export const useOs = create<OsState>()(
             reply = `${person.name} trở lại danh sách ứng viên. Việc đã giao cho người khác không bị thu hồi.`;
           }
         }
-        const ceo: ChatMessage = { id: nid("MSG"), at, role: "ceo", text: reply };
+        const ceo: ChatMessage = { id: nid("MSG"), at, role: "ceo", text: reply, source: "local" };
         set({ messages: [...get().messages, ceo].slice(-100) });
       },
       affectTask: (taskId, reason) => {
