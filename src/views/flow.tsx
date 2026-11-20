@@ -55,6 +55,11 @@ export function CeoView() {
     for (const file of Array.from(list).slice(0, Math.max(0, 4 - files.length))) {
       if (file.size > 5 * 1024 * 1024) { setNotice(file.name + " vượt quá 5 MB."); continue; }
       if (file.type.startsWith("image/")) {
+        const alreadySelected = files.filter((item) => item.data).reduce((total, item) => total + item.file.size, 0);
+        if (alreadySelected + file.size > 2_500_000) {
+          setNotice("Tổng dung lượng ảnh đính kèm không được vượt quá 2,5 MB để gửi ổn định.");
+          continue;
+        }
         const data = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve(String(reader.result ?? ""));
