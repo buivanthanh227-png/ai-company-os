@@ -18,7 +18,7 @@ Thiết lập trong Project → Settings → Environment Variables. Không đặ
 | Biến | Bắt buộc | Giá trị |
 |---|---|---|
 | `GEMINI_API_KEY` | Có nếu dùng Gemini chính | API key tạo từ Google AI Studio |
-| `GEMINI_MODEL` | Không | Mặc định `gemini-3.8-flash`; model dự phòng `gemini-3.5-flash-lite` |
+| `GEMINI_MODEL` | Không | Mặc định `gemini-3.5-flash-lite`; model dự phòng `gemini-3.8-flash` |
 | `OPENROUTER_API_KEY` | Khuyến nghị | API key OpenRouter để dự phòng |
 | `OPENROUTER_MODEL` | Không | Mặc định `openrouter/free` |
 | `BETTER_AUTH_URL` | Khi bật đăng nhập | URL triển khai chính thức, ví dụ `https://your-domain.vercel.app` |
@@ -37,7 +37,7 @@ Sau khi thêm biến môi trường, redeploy để serverless functions nhận 
 2. `authMiddleware` xác minh phiên; không tin user ID do client tự gửi.
 3. Server kiểm tra dữ liệu đầu vào và giới hạn độ dài.
 4. Gemini được gọi trước bằng header `x-goog-api-key`.
-5. Gemini thử `GEMINI_MODEL` (nếu có), sau đó `gemini-3.8-flash` và `gemini-3.5-flash-lite`. Lỗi 404 chuyển model; lỗi 400/401/403 dừng thử Gemini và chuyển OpenRouter; lỗi mạng, timeout, 408, 409, 429 hoặc 5xx tiếp tục cơ chế dự phòng.
+5. Gemini thử `GEMINI_MODEL` (nếu có), sau đó `gemini-3.5-flash-lite` và `gemini-3.8-flash`. Lỗi 404 chuyển model; lỗi 400/401/403 dừng thử Gemini và chuyển OpenRouter; lỗi mạng, timeout, 408, 409, 429 hoặc 5xx tiếp tục cơ chế dự phòng.
 6. OpenRouter dùng endpoint tương thích OpenAI và model `openrouter/free` mặc định.
 7. API key và nội dung lỗi thô của nhà cung cấp không được trả về client.
 
