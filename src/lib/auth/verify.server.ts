@@ -15,6 +15,16 @@ import { auth, authConfigured } from "./server";
 /** True when a real database is configured server-side. */
 const databaseConfigured = Boolean(process.env.DATABASE_URL?.trim());
 
+/**
+ * Personal single-owner mode is permitted only on Vercel production/preview
+ * deployments. The project must keep Vercel Deployment Protection (SSO)
+ * enabled and must not attach an unprotected custom domain.
+ */
+const singleUserModeEnabled =
+  process.env.SINGLE_USER_MODE === "true" &&
+  process.env.VERCEL === "1" &&
+  (process.env.VERCEL_ENV === "production" || process.env.VERCEL_ENV === "preview");
+
 /** Re-export so callers can branch on it without importing `server.ts`. */
 export { authConfigured };
 
@@ -83,10 +93,10 @@ export async function getSessionUser(
  */
 export async function requireUserId(bearerToken?: string): Promise<string> {
   if (!authConfigured && !gateIdentityEnabled()) {
-    if (databaseConfigured) {
+    if (databaseConfigured && !singleUserModeEnabled) {
       throw new Error(
-        "Auth is disabled (VITE_AUTH_ENABLED=false) but DATABASE_URL is set — " +
-          "refusing to fall back to the shared dev user against a real database.",
+        "Auth is disabled while DATABASE_URL is set. Enable authenticated access " +
+          "or explicitly configure protected single-owner mode.",
       );
     }
     return DEV_USER_ID;
