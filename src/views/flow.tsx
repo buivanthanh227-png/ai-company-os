@@ -162,8 +162,8 @@ export function CeoView() {
           {notice ? <p className="px-2 pb-2 text-xs text-muted" aria-live="polite">{notice}</p> : null}
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-2">
             <div className="flex items-center gap-2">
-              <Button type="button" size="sm" variant={mode === "ai" ? "secondary" : "ghost"} onClick={() => setMode("ai")}>Chat AI</Button>
-              <Button type="button" size="sm" variant={mode === "local" ? "secondary" : "ghost"} onClick={() => setMode("local")}>Lệnh nội bộ</Button>
+              <Button type="button" className="h-9 px-3" variant={mode === "ai" ? "secondary" : "ghost"} onClick={() => setMode("ai")}>Chat AI</Button>
+              <Button type="button" className="h-9 px-3" variant={mode === "local" ? "secondary" : "ghost"} onClick={() => setMode("local")}>Lệnh nội bộ</Button>
             </div>
             <Button type="submit" disabled={busy || !text.trim()}>{busy ? "Đang gửi..." : "Gửi"}</Button>
           </div>
