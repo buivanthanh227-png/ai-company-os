@@ -126,7 +126,7 @@ async function callGemini(input: AiChatInput): Promise<AiReply> {
   return { text, provider: "gemini", model, fallbackUsed: false };
 }
 
-async function callOpenRouter(input: AiChatInput): Promise<AiReply> {
+async function callOpenRouter(input: AiChatInput, fallbackUsed: boolean): Promise<AiReply> {
   const apiKey = env("OPENROUTER_API_KEY");
   if (!apiKey) throw providerFailure("OpenRouter API key is not configured");
 
@@ -150,7 +150,7 @@ async function callOpenRouter(input: AiChatInput): Promise<AiReply> {
   );
   const text = extractOpenRouterText(payload);
   if (!text) throw providerFailure("OpenRouter returned an empty response");
-  return { text, provider: "openrouter", model, fallbackUsed: true };
+  return { text, provider: "openrouter", model, fallbackUsed };
 }
 
 export async function runAiChat(rawInput: unknown): Promise<AiReply> {
@@ -163,7 +163,7 @@ export async function runAiChat(rawInput: unknown): Promise<AiReply> {
   }
 
   if (!hasGeminiKey && hasOpenRouterKey) {
-    return callOpenRouter(input);
+    return callOpenRouter(input, false);
   }
 
   try {
@@ -173,7 +173,7 @@ export async function runAiChat(rawInput: unknown): Promise<AiReply> {
     if (!hasOpenRouterKey || failure.retryable === false) {
       throw new Error("AI_PROVIDER_UNAVAILABLE");
     }
-    const reply = await callOpenRouter(input);
+    const reply = await callOpenRouter(input, true);
     return { ...reply, fallbackUsed: true };
   }
 }
