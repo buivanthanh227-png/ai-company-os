@@ -1,4 +1,4 @@
-import { aiChatInputSchema, type AiChatInput } from "./ai.shared";
+import { aiChatInputSchema, type AiChatInput } from "./ai.shared.ts";
 
 const env = (name: string): string | undefined => {
   const value = process.env[name]?.trim();
