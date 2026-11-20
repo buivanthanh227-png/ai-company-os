@@ -119,6 +119,11 @@ export function CeoView() {
     setBusy(true);
     // Show the user's message immediately; network latency should only affect the assistant reply indicator.
     appendChatMessage("chairman", (prompt || "Vui lòng xem tệp đính kèm.") + labels);
+    // Create the delegation plan immediately; the provider reply is not a prerequisite for routing work.
+    if (missionIntent.type === "mission") {
+      const project = projects.find((item) => item.name === "Việc từ phòng CEO");
+      createMission({ projectId: project?.id ?? "new", projectName: "Việc từ phòng CEO", title: missionIntent.title, brief: missionBrief, kind: missionIntent.kind, priority: "P1" });
+    }
     const history = messages.slice(visibleFrom).slice(-8).map((m) => ({ role: m.role === "chairman" ? "user" as const : "assistant" as const, content: m.text }));
     const includeContext = /nhân sự|công ty|dự án|nhiệm vụ|công việc|giao việc|báo cáo|hạn mức|token|điều hành|trạng thái hệ thống/i.test(prompt);
     const context = [
@@ -130,10 +135,6 @@ export function CeoView() {
       const { sendAiMessage } = await import("@/lib/ai.functions");
       const result = await sendAiMessage({ data: { message, history, context: includeContext ? context : undefined, attachments: images } });
       appendChatMessage("ceo", result.text, result.provider);
-      if (missionIntent.type === "mission") {
-        const project = projects.find((item) => item.name === "Việc từ phòng CEO");
-        createMission({ projectId: project?.id ?? "new", projectName: "Việc từ phòng CEO", title: missionIntent.title, brief: missionBrief, kind: missionIntent.kind, priority: "P1" });
-      }
       setFiles([]);
       setNotice(result.provider === "gemini" ? "Đã trả lời bằng Google Gemini." : "Đã trả lời bằng OpenRouter" + (result.fallbackUsed ? " (dự phòng)." : "."));
     } catch (error) {
