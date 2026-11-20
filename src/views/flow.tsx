@@ -50,6 +50,7 @@ export function CeoView() {
   const photoRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const speechRef = useRef<{ stop: () => void } | null>(null);
+  const speechBaseTextRef = useRef("");
 
   async function addFiles(list: FileList | null) {
     if (!list) return;
@@ -78,15 +79,24 @@ export function CeoView() {
 
   function toggleVoice() {
     if (listening) { speechRef.current?.stop(); setListening(false); return; }
-    type Engine = { lang: string; interimResults: boolean; onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null; onerror: (() => void) | null; onend: (() => void) | null; start: () => void; stop: () => void };
+    type Engine = { lang: string; interimResults: boolean; onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>>; resultIndex?: number }) => void) | null; onerror: (() => void) | null; onend: (() => void) | null; start: () => void; stop: () => void };
     const w = window as unknown as { SpeechRecognition?: new () => Engine; webkitSpeechRecognition?: new () => Engine };
     const Ctor = w.SpeechRecognition ?? w.webkitSpeechRecognition;
     if (!Ctor) { setNotice("Trình duyệt chưa hỗ trợ nhập giọng nói."); return; }
     const engine = new Ctor();
     engine.lang = "vi-VN"; engine.interimResults = true;
-    engine.onresult = (e) => setText((v) => v + (v ? " " : "") + Array.from(e.results).map((r) => r[0]?.transcript ?? "").join(""));
+    speechBaseTextRef.current = text.trim();
+    engine.onresult = (e) => {
+      // Recognition events contain the current result list; replace the preview, never append it.
+      const recognized = Array.from(e.results).map((result) => result[0]?.transcript?.trim() ?? "").filter(Boolean).join(" ");
+      const baseText = speechBaseTextRef.current;
+      setText([baseText, recognized].filter(Boolean).join(baseText && recognized ? " " : ""));
+    };
     engine.onerror = () => { setListening(false); setNotice("Không nhận diện được giọng nói. Kiểm tra quyền micro."); };
-    engine.onend = () => setListening(false);
+    engine.onend = () => {
+      setListening(false);
+      setNotice("Đã nhận giọng nói. Ngài có thể chỉnh sửa nội dung trước khi gửi.");
+    };
     speechRef.current = engine;
     try { engine.start(); setListening(true); setNotice("Đang nghe…"); } catch { setNotice("Không thể bật micro. Kiểm tra quyền truy cập."); }
   }
@@ -104,6 +114,8 @@ export function CeoView() {
     const message = (prompt || "Vui lòng xem tệp đính kèm.") + textContent;
     if (mode === "local") { sendLocalChat(message + labels); setFiles([]); return; }
     setBusy(true);
+    // Show the user's message immediately; network latency should only affect the assistant reply indicator.
+    appendChatMessage("chairman", (prompt || "Vui lòng xem tệp đính kèm.") + labels);
     const history = messages.slice(visibleFrom).slice(-8).map((m) => ({ role: m.role === "chairman" ? "user" as const : "assistant" as const, content: m.text }));
     const includeContext = /nhân sự|công ty|dự án|nhiệm vụ|công việc|giao việc|báo cáo|hạn mức|token|điều hành|trạng thái hệ thống/i.test(prompt);
     const context = [
@@ -114,13 +126,11 @@ export function CeoView() {
     try {
       const { sendAiMessage } = await import("@/lib/ai.functions");
       const result = await sendAiMessage({ data: { message, history, context: includeContext ? context : undefined, attachments: images } });
-      appendChatMessage("chairman", (prompt || "Vui lòng xem tệp đính kèm.") + labels);
       appendChatMessage("ceo", result.text, result.provider);
       setFiles([]);
       setNotice(result.provider === "gemini" ? "Đã trả lời bằng Google Gemini." : "Đã trả lời bằng OpenRouter" + (result.fallbackUsed ? " (dự phòng)." : "."));
     } catch (error) {
       const msg = error instanceof Error ? error.message : "";
-      appendChatMessage("chairman", (prompt || "Vui lòng xem tệp đính kèm.") + labels);
       const answer = msg.includes("Unauthorized")
         ? "Phiên đăng nhập chưa hợp lệ. Vui lòng đăng nhập lại."
         : msg.includes("AI_NOT_CONFIGURED")
@@ -164,7 +174,7 @@ export function CeoView() {
                 </div>
               </article>
             ))}
-            {busy ? <p className="text-sm text-muted" aria-live="polite">Trợ lý đang xử lý yêu cầu…</p> : null}
+            {busy ? <p className="text-sm text-muted" aria-live="polite">Đã nhận tin nhắn · AI đang soạn câu trả lời…</p> : null}
           </div>
         )}
       </div>
@@ -191,7 +201,7 @@ export function CeoView() {
               <Button type="button" className="h-9 px-3" variant={mode === "ai" ? "secondary" : "ghost"} onClick={() => setMode("ai")}>Chat AI</Button>
               <Button type="button" className="h-9 px-3" variant={mode === "local" ? "secondary" : "ghost"} onClick={() => setMode("local")}>Lệnh nội bộ</Button>
             </div>
-            <Button type="submit" disabled={busy || (!text.trim() && !files.length)}>{busy ? "Đang gửi..." : "Gửi"}</Button>
+            <Button type="submit" disabled={busy || (!text.trim() && !files.length)}>{busy ? "AI đang trả lời…" : "Gửi"}</Button>
           </div>
         </form>
         <p className="mt-2 text-center text-[11px] text-faint">Nhập giọng nói · Tối đa 4 ảnh hoặc tệp văn bản, 5 MB mỗi tệp.</p>
