@@ -1,11 +1,14 @@
-import { aiChatInputSchema, type AiChatInput } from "./ai.shared";
+import { aiChatInputSchema, type AiChatInput } from "./ai.shared.ts";
 
 const env = (name: string): string | undefined => {
   const value = process.env[name]?.trim();
   return value || undefined;
 };
 
-const REQUEST_TIMEOUT_MS = 45_000;
+const TOTAL_REQUEST_BUDGET_MS = 22_000;
+const MAX_ATTEMPT_TIMEOUT_MS = 12_000;
+const MAX_PROVIDER_ATTEMPTS = 2;
+const RETRY_DELAY_MS = 250;
 const MAX_OUTPUT_TOKENS = 2048;
 
 export type AiProvider = "gemini" | "openrouter";
@@ -36,65 +39,123 @@ function providerFailure(message: string, status?: number): ProviderFailure {
 
 type ProviderDiagnostic = { provider: AiProvider; model: string };
 
-async function postJson(
+export async function postJson(
   url: string,
   headers: HeadersInit,
   body: unknown,
   diagnostic: ProviderDiagnostic,
 ): Promise<unknown> {
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-  } catch (err) {
-    const errorName =
-      err && typeof err === "object" && "name" in err && typeof err.name === "string"
-        ? err.name
-        : "NetworkError";
-    console.error("[ai-provider] request failed", {
-      ...diagnostic,
-      failure: errorName === "TimeoutError" || errorName === "AbortError" ? "timeout" : "network",
-    });
-    throw providerFailure("Provider network or timeout failure");
-  }
+  const deadline = Date.now() + TOTAL_REQUEST_BUDGET_MS;
+  let lastFailure: ProviderFailure | undefined;
 
-  if (!response.ok) {
-    // Parse only non-sensitive provider error identifiers. Never log raw bodies,
-    // prompts, headers, or credentials.
-    let providerCode: string | number | undefined;
+  for (let attempt = 1; attempt <= MAX_PROVIDER_ATTEMPTS; attempt += 1) {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) break;
+
+    let response: Response;
     try {
-      const errorPayload: unknown = await response.json();
-      if (errorPayload && typeof errorPayload === "object" && "error" in errorPayload) {
-        const providerError = errorPayload.error;
-        if (providerError && typeof providerError === "object") {
-          if ("status" in providerError && typeof providerError.status === "string") {
-            providerCode = providerError.status.slice(0, 80);
-          } else if ("code" in providerError && typeof providerError.code === "number") {
-            providerCode = providerError.code;
+      response = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(Math.min(MAX_ATTEMPT_TIMEOUT_MS, remainingMs)),
+      });
+    } catch (err) {
+      const errorName =
+        err && typeof err === "object" && "name" in err && typeof err.name === "string"
+          ? err.name
+          : "NetworkError";
+      lastFailure = providerFailure("Provider network or timeout failure");
+      if (attempt < MAX_PROVIDER_ATTEMPTS && Date.now() + RETRY_DELAY_MS < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+        continue;
+      }
+      console.error("[ai-provider] request failed", {
+        ...diagnostic,
+        failure: errorName === "TimeoutError" || errorName === "AbortError" ? "timeout" : "network",
+      });
+      throw lastFailure;
+    }
+
+    if (!response.ok) {
+      let providerCode: string | number | undefined;
+      try {
+        const errorPayload: unknown = await response.json();
+        if (errorPayload && typeof errorPayload === "object" && "error" in errorPayload) {
+          const providerError = errorPayload.error;
+          if (providerError && typeof providerError === "object") {
+            if ("status" in providerError && typeof providerError.status === "string") {
+              providerCode = providerError.status.slice(0, 80);
+            } else if ("code" in providerError && typeof providerError.code === "number") {
+              providerCode = providerError.code;
+            }
           }
         }
+      } catch {
+        // HTTP status is sufficient for safe diagnostics.
       }
-    } catch {
-      // The HTTP status remains sufficient for safe diagnostics.
+      lastFailure = providerFailure("Provider request failed", response.status);
+      if (
+        lastFailure.retryable &&
+        attempt < MAX_PROVIDER_ATTEMPTS &&
+        Date.now() + RETRY_DELAY_MS < deadline
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+        continue;
+      }
+      console.error("[ai-provider] HTTP request failed", {
+        ...diagnostic,
+        httpStatus: response.status,
+        providerCode,
+      });
+      throw lastFailure;
     }
-    console.error("[ai-provider] HTTP request failed", {
-      ...diagnostic,
-      httpStatus: response.status,
-      providerCode,
-    });
-    throw providerFailure("Provider request failed", response.status);
+
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      lastFailure = providerFailure("Provider returned invalid JSON");
+      if (attempt < MAX_PROVIDER_ATTEMPTS && Date.now() + RETRY_DELAY_MS < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+        continue;
+      }
+      console.error("[ai-provider] invalid JSON response", diagnostic);
+      throw lastFailure;
+    }
+
+    if (payload && typeof payload === "object" && "error" in payload) {
+      const providerError = (payload as { error?: unknown }).error;
+      const errorObject =
+        providerError && typeof providerError === "object"
+          ? (providerError as { code?: unknown; status?: unknown })
+          : undefined;
+      const status =
+        typeof errorObject?.code === "number"
+          ? errorObject.code
+          : typeof errorObject?.status === "string" && /^\d{3}$/.test(errorObject.status)
+            ? Number(errorObject.status)
+            : undefined;
+      lastFailure = providerFailure("Provider returned an error payload", status);
+      if (
+        lastFailure.retryable &&
+        attempt < MAX_PROVIDER_ATTEMPTS &&
+        Date.now() + RETRY_DELAY_MS < deadline
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+        continue;
+      }
+      console.error("[ai-provider] provider error payload", {
+        ...diagnostic,
+        httpStatus: status,
+      });
+      throw lastFailure;
+    }
+
+    return payload;
   }
 
-  try {
-    return await response.json();
-  } catch {
-    console.error("[ai-provider] invalid JSON response", diagnostic);
-    throw providerFailure("Provider returned invalid JSON");
-  }
+  throw lastFailure ?? providerFailure("Provider request budget exhausted");
 }
 
 function extractGeminiText(payload: unknown): string {

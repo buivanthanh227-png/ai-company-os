@@ -278,7 +278,9 @@ function tokenIdentityKey(token: string): string {
             .digest("base64url");
         }
       }
-    } catch {}
+    } catch {
+      // Invalid token claims are ignored; the opaque token hash remains the fallback identity.
+    }
   }
   return createHash("sha256").update(token).digest("base64url");
 }

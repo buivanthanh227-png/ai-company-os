@@ -493,3 +493,100 @@ describe("sessionBoundToGateIdentity", () => {
     assert.equal(sessionBoundToGateIdentity([], "user-1", provider), false);
   });
 });
+
+
+describe("additional auth fail-closed invariants", () => {
+  it("rejects a malformed identity token without throwing", async () => {
+    const previousOrigin = process.env.GROK_GATE_ORIGIN;
+    const previousProject = process.env.GROK_PROJECT_ID;
+    process.env.GROK_GATE_ORIGIN = ISSUER;
+    process.env.GROK_PROJECT_ID = "proj-123";
+    try {
+      const identity = await gateIdentityFromHeaders(
+        new Headers({ "x-grok-identity": "not-a-jwt" }),
+        async () => ({ keys: [] }),
+      );
+      assert.equal(identity, null);
+    } finally {
+      if (previousOrigin === undefined) delete process.env.GROK_GATE_ORIGIN;
+      else process.env.GROK_GATE_ORIGIN = previousOrigin;
+      if (previousProject === undefined) delete process.env.GROK_PROJECT_ID;
+      else process.env.GROK_PROJECT_ID = previousProject;
+    }
+  });
+
+  it("rejects a correctly signed token with the wrong issuer", async () => {
+    const previousOrigin = process.env.GROK_GATE_ORIGIN;
+    const previousProject = process.env.GROK_PROJECT_ID;
+    const key = await makeKey("wrong-issuer");
+    process.env.GROK_GATE_ORIGIN = ISSUER;
+    process.env.GROK_PROJECT_ID = "proj-123";
+    try {
+      const token = await signToken(
+        key,
+        { sub: "user-1" },
+        { issuer: "https://attacker.invalid" },
+      );
+      const identity = await gateIdentityFromHeaders(
+        new Headers({ "x-grok-identity": token }),
+        staticJwks([key.jwk]).fetchImpl,
+      );
+      assert.equal(identity, null);
+    } finally {
+      if (previousOrigin === undefined) delete process.env.GROK_GATE_ORIGIN;
+      else process.env.GROK_GATE_ORIGIN = previousOrigin;
+      if (previousProject === undefined) delete process.env.GROK_PROJECT_ID;
+      else process.env.GROK_PROJECT_ID = previousProject;
+    }
+  });
+
+  it("rejects a correctly signed token with the wrong application audience", async () => {
+    const previousOrigin = process.env.GROK_GATE_ORIGIN;
+    const previousProject = process.env.GROK_PROJECT_ID;
+    const key = await makeKey("wrong-audience");
+    process.env.GROK_GATE_ORIGIN = ISSUER;
+    process.env.GROK_PROJECT_ID = "proj-123";
+    try {
+      const token = await signToken(
+        key,
+        { sub: "user-1" },
+        { audience: "app:another-project" },
+      );
+      const identity = await gateIdentityFromHeaders(
+        new Headers({ "x-grok-identity": token }),
+        staticJwks([key.jwk]).fetchImpl,
+      );
+      assert.equal(identity, null);
+    } finally {
+      if (previousOrigin === undefined) delete process.env.GROK_GATE_ORIGIN;
+      else process.env.GROK_GATE_ORIGIN = previousOrigin;
+      if (previousProject === undefined) delete process.env.GROK_PROJECT_ID;
+      else process.env.GROK_PROJECT_ID = previousProject;
+    }
+  });
+
+  it("rejects an expired signed identity token", async () => {
+    const previousOrigin = process.env.GROK_GATE_ORIGIN;
+    const previousProject = process.env.GROK_PROJECT_ID;
+    const key = await makeKey("expired-token");
+    process.env.GROK_GATE_ORIGIN = ISSUER;
+    process.env.GROK_PROJECT_ID = "proj-123";
+    try {
+      const token = await signToken(
+        key,
+        { sub: "user-1" },
+        { expiresIn: -60, issuedAt: Math.floor(Date.now() / 1000) - 120 },
+      );
+      const identity = await gateIdentityFromHeaders(
+        new Headers({ "x-grok-identity": token }),
+        staticJwks([key.jwk]).fetchImpl,
+      );
+      assert.equal(identity, null);
+    } finally {
+      if (previousOrigin === undefined) delete process.env.GROK_GATE_ORIGIN;
+      else process.env.GROK_GATE_ORIGIN = previousOrigin;
+      if (previousProject === undefined) delete process.env.GROK_PROJECT_ID;
+      else process.env.GROK_PROJECT_ID = previousProject;
+    }
+  });
+});
