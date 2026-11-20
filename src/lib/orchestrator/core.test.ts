@@ -4,8 +4,12 @@ import {
   canTransitionTaskStatus,
   getDispatchableTasks,
   isTaskDispatchable,
+  matchesApproval,
+  matchesReview,
   transitionTaskStatus,
   validateTaskPlan,
+  type ApprovalEvidence,
+  type ReviewEvidence,
   type RuntimeTask,
   type TaskPlan,
 } from "./core.ts";
@@ -19,39 +23,63 @@ const validPlan: TaskPlan = {
   ],
 };
 
-test("accepts a valid acyclic task plan", () => {
-  assert.deepEqual(validateTaskPlan(validPlan), { valid: true, errors: [] });
+const task = (id: string, dependsOn: string[] = []): RuntimeTask => ({
+  id, revision: 1, contentHash: `hash-${id}`, status: "queued", dependsOn,
+  approvalRequired: false, reviewRequired: false,
+});
+const approval = (forTask: RuntimeTask, overrides: Partial<ApprovalEvidence> = {}): ApprovalEvidence => ({
+  approvalId: "approval-1", taskId: forTask.id, taskRevision: forTask.revision,
+  taskHash: forTask.contentHash, approvedBy: "user-1",
+  approvedAt: "2026-11-20T10:00:00.000Z", scope: "execute", revokedAt: null, ...overrides,
+});
+const review = (forTask: RuntimeTask, overrides: Partial<ReviewEvidence> = {}): ReviewEvidence => ({
+  reviewId: "review-1", taskId: forTask.id, taskRevision: forTask.revision,
+  taskHash: forTask.contentHash, reviewerId: "reviewer-1",
+  reviewedAt: "2026-11-20T10:00:00.000Z", verdict: "accepted", ...overrides,
 });
 
-test("rejects a planner response that is not an object", () => {
-  assert.equal(validateTaskPlan(null).valid, false);
-});
-
-test("rejects unsupported schema versions and empty objectives", () => {
-  const result = validateTaskPlan({ ...validPlan, schemaVersion: 2, objective: " " });
-  assert.equal(result.valid, false);
-  if (!result.valid) {
-    assert.ok(result.errors.some((error) => error.includes("schemaVersion")));
-    assert.ok(result.errors.some((error) => error.includes("objective")));
+test("accepts a valid acyclic plan and returns a canonical copy", () => {
+  const input = structuredClone(validPlan);
+  const result = validateTaskPlan(input);
+  assert.equal(result.valid, true);
+  if (result.valid) {
+    assert.deepEqual(result.plan, validPlan);
+    assert.notEqual(result.plan, input);
+    assert.notEqual(result.plan.tasks, input.tasks);
   }
 });
 
-test("enforces the default eight-task limit and hard cap of twenty", () => {
+test("rejects non-object, invalid schema and empty objectives", () => {
+  assert.equal(validateTaskPlan(null).valid, false);
+  assert.equal(validateTaskPlan({ ...validPlan, schemaVersion: 2, objective: " " }).valid, false);
+});
+
+test("enforces task caps and rejects invalid cap configuration", () => {
   const tasks = Array.from({ length: 9 }, (_, index) => ({
     id: `task-${index}`, title: "Task", objective: "Do work", role: "researcher", provider: "manual", dependsOn: [],
   }));
   assert.equal(validateTaskPlan({ schemaVersion: 1, objective: "Plan", tasks }).valid, false);
-  assert.equal(validateTaskPlan({ schemaVersion: 1, objective: "Plan", tasks }, 20).valid, true);
+  assert.equal(validateTaskPlan({ schemaVersion: 1, objective: "Plan", tasks }, 9).valid, true);
+  assert.equal(validateTaskPlan({ schemaVersion: 1, objective: "Plan", tasks: [tasks[0]] }, 0).valid, false);
+  assert.equal(validateTaskPlan({ schemaVersion: 1, objective: "Plan", tasks: [tasks[0]] }, -1).valid, false);
+  assert.equal(validateTaskPlan({ schemaVersion: 1, objective: "Plan", tasks: [tasks[0]] }, 1.5).valid, false);
+  assert.equal(validateTaskPlan({ schemaVersion: 1, objective: "Plan", tasks: [tasks[0]] }, Infinity).valid, false);
+  assert.equal(validateTaskPlan({ schemaVersion: 1, objective: "Plan", tasks: [tasks[0]] }, NaN).valid, false);
   const twentyOne = Array.from({ length: 21 }, (_, index) => ({ ...tasks[0]!, id: `overflow-${index}` }));
-  assert.equal(validateTaskPlan({ schemaVersion: 1, objective: "Plan", tasks: twentyOne }, 99).valid, false);
+  assert.equal(validateTaskPlan({ schemaVersion: 1, objective: "Plan", tasks: twentyOne }, 20).valid, false);
 });
 
-test("rejects duplicate ids, self-dependencies and unknown dependencies", () => {
+test("rejects unknown properties rather than passing them downstream", () => {
+  assert.equal(validateTaskPlan({ ...validPlan, injected: "no" }).valid, false);
+  const plan = { ...validPlan, tasks: [{ ...validPlan.tasks[0], unexpectedExecutionInstruction: "run shell" }] };
+  assert.equal(validateTaskPlan(plan).valid, false);
+});
+
+test("rejects duplicate ids, self-dependencies, duplicate dependencies and unknown dependencies", () => {
   const result = validateTaskPlan({
-    schemaVersion: 1,
-    objective: "Plan",
+    schemaVersion: 1, objective: "Plan",
     tasks: [
-      { ...validPlan.tasks[0], id: "same", dependsOn: ["same", "missing"] },
+      { ...validPlan.tasks[0], id: "same", dependsOn: ["same", "missing", "missing"] },
       { ...validPlan.tasks[1], id: "same", dependsOn: [] },
     ],
   });
@@ -60,63 +88,84 @@ test("rejects duplicate ids, self-dependencies and unknown dependencies", () => 
     assert.ok(result.errors.some((error) => error.includes("Duplicate task id")));
     assert.ok(result.errors.some((error) => error.includes("cannot depend on itself")));
     assert.ok(result.errors.some((error) => error.includes("unknown task")));
+    assert.ok(result.errors.some((error) => error.includes("duplicate dependency")));
   }
 });
 
-test("rejects dependency cycles", () => {
-  const result = validateTaskPlan({
-    schemaVersion: 1,
-    objective: "Plan",
-    tasks: [
-      { ...validPlan.tasks[0], id: "a", dependsOn: ["b"] },
-      { ...validPlan.tasks[1], id: "b", dependsOn: ["a"] },
-    ],
+test("detects two-node, three-node, deep and branched cycles", () => {
+  const make = (ids: string[], edges: Record<string, string[]>) => ({
+    schemaVersion: 1, objective: "Plan",
+    tasks: ids.map((id) => ({ ...validPlan.tasks[0], id, dependsOn: edges[id] ?? [] })),
   });
-  assert.equal(result.valid, false);
-  if (!result.valid) assert.ok(result.errors.some((error) => error.includes("cycle")));
+  assert.equal(validateTaskPlan(make(["a", "b"], { a: ["b"], b: ["a"] })).valid, false);
+  assert.equal(validateTaskPlan(make(["a", "b", "c"], { a: ["b"], b: ["c"], c: ["a"] })).valid, false);
+  assert.equal(validateTaskPlan(make(["a", "b", "c", "d"], { a: ["b"], b: ["c"], c: ["d"], d: ["b"] })).valid, false);
+  assert.equal(validateTaskPlan(make(["root", "a", "b", "c"], { root: ["a", "c"], a: ["b"], b: ["a"], c: [] })).valid, false);
 });
 
-test("rejects unsupported roles, providers and malformed dependency arrays", () => {
-  const result = validateTaskPlan({
-    schemaVersion: 1,
-    objective: "Plan",
-    tasks: [{ ...validPlan.tasks[0], role: "admin", provider: "unknown", dependsOn: "not-an-array" }],
-  });
-  assert.equal(result.valid, false);
+test("accepts a 20-node acyclic chain", () => {
+  const tasks = Array.from({ length: 20 }, (_, i) => ({
+    ...validPlan.tasks[0], id: `n${i}`, dependsOn: i === 0 ? [] : [`n${i - 1}`],
+  }));
+  assert.equal(validateTaskPlan({ schemaVersion: 1, objective: "Chain", tasks }, 20).valid, true);
 });
 
-const runtimeTasks = (): RuntimeTask[] => [
-  { id: "a", status: "succeeded", dependsOn: [] },
-  { id: "b", status: "queued", dependsOn: ["a"] },
-  { id: "c", status: "queued", dependsOn: ["missing"] },
-  { id: "d", status: "queued", dependsOn: [], approvalRequired: true, approvedAt: null },
-  { id: "e", status: "queued", dependsOn: [], approvalRequired: true, approvedAt: "2026-11-20T10:00:00.000Z" },
-];
-
-test("dispatches only queued tasks with successful dependencies and required approval", () => {
-  const tasks = runtimeTasks();
-  assert.deepEqual(getDispatchableTasks(tasks).map((task) => task.id), ["b", "e"]);
-  assert.equal(isTaskDispatchable(tasks[3]!, tasks), false);
+test("approval evidence must be server-resolved, scoped, current and well formed", () => {
+  const item = { ...task("deploy"), approvalRequired: true };
+  assert.equal(matchesApproval(item, approval(item), Date.parse("2026-11-20T11:00:00Z")), true);
+  assert.equal(matchesApproval(item, approval(item, { approvedAt: "garbage" })), false);
+  assert.equal(matchesApproval(item, approval(item, { approvedAt: "2027-01-01T00:00:00Z" }), Date.parse("2026-11-20T11:00:00Z")), false);
+  assert.equal(matchesApproval(item, approval(item, { taskRevision: 2 })), false);
+  assert.equal(matchesApproval(item, approval(item, { taskHash: "stale-hash" })), false);
+  assert.equal(matchesApproval(item, approval(item, { revokedAt: "2026-11-20T10:30:00Z" })), false);
+  assert.equal(matchesApproval(item, approval(item, { approvedBy: " " })), false);
 });
 
-test("does not dispatch a dependent task until every dependency succeeds", () => {
-  const tasks: RuntimeTask[] = [
-    { id: "parent", status: "running", dependsOn: [] },
-    { id: "child", status: "queued", dependsOn: ["parent"] },
-  ];
-  assert.deepEqual(getDispatchableTasks(tasks), []);
+test("dispatch fails closed without matching approval and on duplicate runtime IDs", () => {
+  const protectedTask = { ...task("deploy"), approvalRequired: true };
+  assert.equal(isTaskDispatchable(protectedTask, [protectedTask]), false);
+  assert.equal(isTaskDispatchable(protectedTask, [protectedTask], [approval(protectedTask)]), true);
+  assert.equal(isTaskDispatchable(protectedTask, [protectedTask, { ...protectedTask }], [approval(protectedTask)]), false);
+  assert.deepEqual(getDispatchableTasks([protectedTask, { ...protectedTask }], [approval(protectedTask)]), []);
 });
 
-test("allows only explicitly defined status transitions", () => {
-  assert.equal(canTransitionTaskStatus("queued", "dispatched"), true);
-  assert.equal(canTransitionTaskStatus("queued", "running"), false);
-  assert.equal(canTransitionTaskStatus("succeeded", "queued"), false);
-  assert.equal(transitionTaskStatus("running", "review_required"), "review_required");
-  assert.throws(() => transitionTaskStatus("succeeded", "queued"), /Invalid task transition/);
+test("dispatch waits for every dependency and rejects unknown dependencies", () => {
+  const parent = { ...task("parent"), status: "running" as const };
+  const child = task("child", ["parent"]);
+  assert.equal(isTaskDispatchable(child, [parent, child]), false);
+  parent.status = "succeeded";
+  assert.equal(isTaskDispatchable(child, [parent, child]), true);
+  assert.equal(isTaskDispatchable(task("orphan", ["missing"]), [task("orphan", ["missing"])]), false);
+});
+
+test("planned tasks cannot bypass required approval by going directly to queued", () => {
+  assert.equal(canTransitionTaskStatus("planned", "queued"), false);
+  assert.equal(canTransitionTaskStatus("planned", "queued", { approvalRequired: true, reviewRequired: false }), false);
+  assert.equal(canTransitionTaskStatus("planned", "queued", { approvalRequired: false, reviewRequired: false }), true);
+  assert.equal(canTransitionTaskStatus("needs_approval", "queued"), false);
+  const protectedTask = { ...task("deploy"), approvalRequired: true };
+  const policy = { approvalRequired: true, reviewRequired: false, task: protectedTask, approval: approval(protectedTask) };
+  assert.equal(canTransitionTaskStatus("needs_approval", "queued", policy), true);
+  assert.equal(canTransitionTaskStatus("needs_approval", "queued", { ...policy, approval: null }), false);
+});
+
+test("execution success is distinct from accepted completion and review cannot be bypassed", () => {
+  assert.equal(canTransitionTaskStatus("running", "succeeded"), false);
+  assert.equal(canTransitionTaskStatus("running", "execution_succeeded"), true);
+  assert.equal(canTransitionTaskStatus("execution_succeeded", "succeeded"), false);
+  assert.equal(canTransitionTaskStatus("execution_succeeded", "succeeded", { approvalRequired: false, reviewRequired: false }), true);
+  assert.equal(canTransitionTaskStatus("execution_succeeded", "review_required", { approvalRequired: false, reviewRequired: true }), true);
+  const item = { ...task("implement"), reviewRequired: true };
+  const policy = { approvalRequired: false, reviewRequired: true, task: item, review: review(item) };
+  assert.equal(canTransitionTaskStatus("review_required", "succeeded"), false);
+  assert.equal(canTransitionTaskStatus("review_required", "succeeded", policy), true);
+  assert.equal(canTransitionTaskStatus("review_required", "succeeded", { ...policy, review: review(item, { verdict: "revise" }) }), false);
+  assert.equal(matchesReview(item, review(item, { taskRevision: 2 })), false);
 });
 
 test("terminal states cannot be reopened", () => {
   for (const status of ["succeeded", "failed", "cancelled"] as const) {
     assert.equal(canTransitionTaskStatus(status, "queued"), false);
   }
+  assert.throws(() => transitionTaskStatus("running", "succeeded"), /Invalid or unauthorized/);
 });
