@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { Meter, PageHeader, PresenceBadge, StaffMark } from "@/components/bits";
 import { Button, Field, Panel, Select, TextArea, TextInput } from "@/components/ui";
@@ -40,7 +40,7 @@ export function CeoView() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const prompt = text.trim();
     if (!prompt || busy) return;
@@ -103,8 +103,8 @@ export function CeoView() {
     <div>
       <PageHeader
         kicker="CEO"
-        title="Phòng ChatGPT"
-        lede="Chat CEO ưu tiên Gemini Router. Khi AI chưa sẵn sàng, có thể dùng bộ điều phối nội bộ; các lệnh phân công vẫn được thực hiện tại Trung tâm giao việc."
+        title="Phòng Chat CEO"
+        lede="Chat CEO ưu tiên Gemini, tự chuyển sang OpenRouter khi cần. Bản tóm tắt nhiệm vụ và dự án sẽ được gửi tới nhà cung cấp AI để trả lời; các lệnh phân công vẫn được thực hiện tại Trung tâm giao việc."
       />
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]">
         <Panel className="flex min-h-[32rem] flex-col">
@@ -133,7 +133,7 @@ export function CeoView() {
           <form className="mt-3 flex flex-col gap-2" onSubmit={submit}>
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs text-muted">Chế độ trả lời:</span>
-              <Button type="button" variant={mode === "ai" ? "primary" : "secondary"} onClick={() => setMode("ai")}>AI Gemini Router</Button>
+              <Button type="button" variant={mode === "ai" ? "primary" : "secondary"} onClick={() => setMode("ai")}>AI Router</Button>
               <Button type="button" variant={mode === "local" ? "primary" : "secondary"} onClick={() => setMode("local")}>Lệnh nội bộ</Button>
             </div>
             <TextArea value={text} onChange={(event) => setText(event.target.value)} placeholder="Giao việc hoặc hỏi CEO..." disabled={busy} />
