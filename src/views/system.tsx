@@ -15,7 +15,7 @@ const DOCS = [
   },
   {
     title: "Cái gì đang mô phỏng",
-    body: "Chưa có cuộc gọi nào tới ChatGPT, Claude, Gemini hay nhà cung cấp khác. Khóa API nếu anh dán vào chỉ nằm trong trình duyệt này và không được gửi đi. Ngân sách 0–100 là thước nội bộ để tập chuyển giao, không phải token nhà cung cấp. Hạn mức chính thức ghi «chưa xác minh» khi phiên kiểm tra 20/11/2026 không có số công khai đủ tin cậy.",
+    body: "Bộ lập kế hoạch, chấm điểm nhân sự, phân công và chuyển giao vẫn dùng logic cục bộ. Gateway Gemini Router đã được bổ sung ở backend: Gemini là tuyến chính, OpenRouter là tuyến dự phòng; khóa chỉ đọc từ biến môi trường máy chủ. Chỉ được xem là AI chạy thật sau khi deploy backend, bật xác thực, cấu hình khóa và phép thử kết nối trả về provider/model. Ngân sách 0–100 vẫn là thước nội bộ, không phải token nhà cung cấp.",
   },
   {
     title: "Quy tắc chuyển giao",
@@ -27,11 +27,11 @@ const DOCS = [
   },
   {
     title: "Kiến trúc giai đoạn 2",
-    body: "Backend nên là một cổng duy nhất phía máy chủ. Khóa nằm trong kho bí mật, không vào trình duyệt và không vào git. Hàng đợi việc bền (SQLite trước, PostgreSQL khi cần nhiều máy) lưu ngữ cảnh, lần thử, lý do chuyển và người đã đi qua. Mỗi nhà cung cấp là một đầu nối cùng kiểu: gửi việc, nhận kết quả, báo hết hạn hoặc lỗi. LangGraph, CrewAI hay n8n có thể là công cụ bên dưới, không được là lõi bắt buộc, để khỏi khóa một framework. GitHub Pages chỉ phát được giao diện tĩnh. Điều phối thật cần máy chủ. Bản này đã chạy được giao diện và luật điều phối; phần gọi API là việc của cổng máy chủ.",
+    body: "Backend Vercel dùng Nitro/TanStack Start sẵn có. Gateway Gemini Router được đặt trong module server-only; khóa nằm trong Environment Variables, không vào trình duyệt hay git. Gemini là tuyến chính; OpenRouter free router là tuyến dự phòng khi lỗi mạng, timeout, rate limit hoặc 5xx. Server function yêu cầu authMiddleware. Hàng đợi bền, nhật ký token/chi phí và giới hạn tốc độ dùng chung giữa các instance vẫn là các phần tiếp theo. GitHub Pages chỉ phát bản giao diện tĩnh, không chạy gateway này.",
   },
   {
     title: "Triển khai",
-    body: "Giao diện đang chạy trong bản xem trước. Khi xuất bản, ứng dụng đi theo nền tảng web có máy chủ, không phải một file HTML tĩnh. Kho tài liệu trong ứng dụng là bản hướng dẫn vận hành. Excel danh mục xuất từ Cài đặt, kèm trạng thái hiện tại.",
+    body: "Ứng dụng cần được deploy bằng server build lên Vercel. Sau đó thêm GEMINI_API_KEY và OPENROUTER_API_KEY trong Project Settings → Environment Variables, bật và cấu hình Better Auth, rồi redeploy. Trong Cài đặt, bấm Kiểm tra kết nối AI. GitHub Pages không thể thực thi server functions.",
   },
 ];
 
