@@ -210,7 +210,9 @@ export function planTasks(input: {
       if (!row.eligible) return false;
       if (!editPhase) return true;
       const person = input.roster.find((staff) => staff.id === row.id);
-      return person?.fileEdit === "yes";
+      if (!person?.website) return false;
+      if (person.id === "grok" || person.id === "cursor") return false;
+      return !editPhase || person.fileEdit === "yes";
     }) ?? null;
     if (pick) used.push(pick.id);
     const lines = [
