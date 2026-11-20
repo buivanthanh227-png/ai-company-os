@@ -254,7 +254,7 @@ async function callGemini(input: AiChatInput): Promise<AiReply> {
           role: item.role === "assistant" ? "model" : "user",
           parts: [{ text: item.content }],
         })),
-        { role: "user", parts: [{ text: input.message }] },
+        { role: "user", parts: [{ text: input.message }, ...(input.attachments ?? []).map((item) => ({ inlineData: { mimeType: item.mimeType, data: item.data } }))] },
       ];
 
       const payload = await postJson(
@@ -300,7 +300,7 @@ async function callOpenRouter(input: AiChatInput, fallbackUsed: boolean): Promis
       role: item.role === "assistant" ? "assistant" : "user",
       content: item.content,
     })),
-    { role: "user", content: input.message },
+    { role: "user", content: input.attachments?.length ? [{ type: "text", text: input.message }, ...input.attachments.map((item) => ({ type: "image_url", image_url: { url: "data:" + item.mimeType + ";base64," + item.data } }))] : input.message },
   ];
   const payload = await postJson(
     "https://openrouter.ai/api/v1/chat/completions",
