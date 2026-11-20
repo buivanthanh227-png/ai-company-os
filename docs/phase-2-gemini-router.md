@@ -7,8 +7,9 @@
 - Nếu chỉ cấu hình OpenRouter, gateway có thể chạy qua `openrouter/free`.
 - API key chỉ đọc từ biến môi trường của Vercel/server.
 - Server function dùng `authMiddleware`; không mở endpoint AI công khai cho khách chưa xác thực.
-- Chat CEO đã có chế độ AI Router: Gemini trước, OpenRouter dự phòng; gửi tối đa 8 lượt hội thoại gần nhất và bản tóm tắt trạng thái dự án/nhiệm vụ. Chế độ lệnh nội bộ cũ vẫn được giữ để xem báo cáo và tạo việc theo luật cục bộ.
-- Chat AI chỉ tư vấn/trả lời, chưa tự tạo task hay sửa dữ liệu. Phân công chính thức vẫn qua Trung tâm giao việc.
+- Phòng Chat AI mặc định là trợ lý đa năng: trả lời câu hỏi trên mọi chủ đề, không tự biến hội thoại thông thường thành nhiệm vụ công việc. Gemini là nhà cung cấp chính, OpenRouter là dự phòng; gửi tối đa 8 lượt hội thoại gần nhất.
+- Chỉ gửi tóm tắt dữ liệu workspace khi câu hỏi liên quan rõ ràng đến công ty, dự án, nhân sự hoặc nhiệm vụ; không đính kèm dữ liệu vận hành vào câu hỏi đời thường.
+- Nếu AI Router lỗi, giao diện báo lỗi rõ ràng và không giả câu trả lời bằng bộ lập kế hoạch nội bộ. Muốn xem báo cáo hoặc thao tác cục bộ thì người dùng chủ động chuyển sang **Lệnh nội bộ**. Phân công chính thức vẫn qua Trung tâm giao việc.
 
 ## Biến môi trường Vercel
 

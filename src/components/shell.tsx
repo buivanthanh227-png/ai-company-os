@@ -32,7 +32,7 @@ const NAV = [
     group: "Điều hành",
     items: [
       { view: "overview", label: "Tổng quan điều hành", icon: LayoutDashboard },
-      { view: "ceo", label: "Chat với CEO", icon: MessagesSquare },
+      { view: "ceo", label: "Chat AI đa năng", icon: MessagesSquare },
       { view: "dispatch", label: "Trung tâm giao việc", icon: ListTodo },
       { view: "orchestrator", label: "Bộ điều phối tự động", icon: Waypoints },
     ],
