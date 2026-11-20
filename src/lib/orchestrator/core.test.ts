@@ -42,7 +42,8 @@ test("enforces the default eight-task limit and hard cap of twenty", () => {
   }));
   assert.equal(validateTaskPlan({ schemaVersion: 1, objective: "Plan", tasks }).valid, false);
   assert.equal(validateTaskPlan({ schemaVersion: 1, objective: "Plan", tasks }, 20).valid, true);
-  assert.equal(validateTaskPlan({ schemaVersion: 1, objective: "Plan", tasks: tasks.slice(0, 21) }, 99).valid, false);
+  const twentyOne = Array.from({ length: 21 }, (_, index) => ({ ...tasks[0]!, id: `overflow-${index}` }));
+  assert.equal(validateTaskPlan({ schemaVersion: 1, objective: "Plan", tasks: twentyOne }, 99).valid, false);
 });
 
 test("rejects duplicate ids, self-dependencies and unknown dependencies", () => {
