@@ -194,7 +194,7 @@ export function SettingsView() {
           <p className="text-xs text-faint">Vercel Environment Variables: GEMINI_API_KEY, OPENROUTER_API_KEY. Có thể đặt GEMINI_MODEL và OPENROUTER_MODEL để chọn model.</p>
           <div className="flex flex-wrap items-center gap-3">
             <Button onClick={runAiCheck} disabled={aiChecking}>{aiChecking ? "Đang kiểm tra..." : "Kiểm tra kết nối AI"}</Button>
-            {aiStatus ? <p className="text-sm text-success">{aiStatus}</p> : null}
+            {aiStatus ? <p className="text-sm font-medium text-ok">{aiStatus}</p> : null}
             {aiError ? <p className="text-sm text-danger">{aiError}</p> : null}
           </div>
         </Panel>
