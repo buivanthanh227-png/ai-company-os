@@ -111,7 +111,7 @@ export function CeoView() {
     <div>
       <PageHeader
         kicker="CEO"
-        title="Phòng Chat CEO"
+        title="Phòng Chat AI"
         lede="Trò chuyện AI đa năng như một trợ lý cá nhân: hỏi đáp kiến thức, học tập, viết lách, phân tích, lập trình và mọi chủ đề khác. Khi cần điều hành công ty, bạn có thể chuyển sang Lệnh nội bộ hoặc giao việc tại Trung tâm giao việc."
       />
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]">
