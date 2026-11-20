@@ -119,11 +119,15 @@ test("approval evidence must be server-resolved, scoped, current and well formed
   assert.equal(matchesApproval(item, approval(item, { taskHash: "stale-hash" })), false);
   assert.equal(matchesApproval(item, approval(item, { revokedAt: "2026-11-20T10:30:00Z" })), false);
   assert.equal(matchesApproval(item, approval(item, { approvedBy: " " })), false);
+  assert.equal(matchesApproval(item, approval(item, { revokedAt: "" })), false);
+  assert.equal(matchesApproval(item, { ...approval(item), approvedAt: 42 } as unknown as ApprovalEvidence), false);
 });
 
 test("dispatch fails closed without matching approval and on duplicate runtime IDs", () => {
   const protectedTask = { ...task("deploy"), approvalRequired: true };
   assert.equal(isTaskDispatchable(protectedTask, [protectedTask]), false);
+  assert.equal(isTaskDispatchable({ ...protectedTask, approvalRequired: undefined } as unknown as RuntimeTask, [protectedTask], [approval(protectedTask)]), false);
+  assert.equal(isTaskDispatchable({ ...protectedTask, reviewRequired: undefined } as unknown as RuntimeTask, [protectedTask], [approval(protectedTask)]), false);
   assert.equal(isTaskDispatchable(protectedTask, [protectedTask], [approval(protectedTask)]), true);
   assert.equal(isTaskDispatchable(protectedTask, [protectedTask, { ...protectedTask }], [approval(protectedTask)]), false);
   assert.deepEqual(getDispatchableTasks([protectedTask, { ...protectedTask }], [approval(protectedTask)]), []);
@@ -142,6 +146,7 @@ test("planned tasks cannot bypass required approval by going directly to queued"
   assert.equal(canTransitionTaskStatus("planned", "queued"), false);
   assert.equal(canTransitionTaskStatus("planned", "queued", { approvalRequired: true, reviewRequired: false }), false);
   assert.equal(canTransitionTaskStatus("planned", "queued", { approvalRequired: false, reviewRequired: false }), true);
+  assert.equal(canTransitionTaskStatus("planned", "queued", { approvalRequired: undefined, reviewRequired: false } as never), false);
   assert.equal(canTransitionTaskStatus("needs_approval", "queued"), false);
   const protectedTask = { ...task("deploy"), approvalRequired: true };
   const policy = { approvalRequired: true, reviewRequired: false, task: protectedTask, approval: approval(protectedTask) };
