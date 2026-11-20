@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { aiChatInputSchema, type AiChatInput } from "./ai.shared";
 
 const env = (name: string): string | undefined => {
   const value = process.env[name]?.trim();
@@ -8,20 +8,6 @@ const env = (name: string): string | undefined => {
 const REQUEST_TIMEOUT_MS = 45_000;
 const MAX_OUTPUT_TOKENS = 2048;
 
-export const aiChatInputSchema = z.object({
-  message: z.string().trim().min(1).max(12_000),
-  history: z
-    .array(
-      z.object({
-        role: z.enum(["user", "assistant"]),
-        content: z.string().max(12_000),
-      }),
-    )
-    .max(12)
-    .default([]),
-});
-
-export type AiChatInput = z.infer<typeof aiChatInputSchema>;
 export type AiProvider = "gemini" | "openrouter";
 
 export type AiReply = {
