@@ -92,6 +92,9 @@ export async function getSessionUser(
  * - Auth disabled + no database -> the shared dev user id.
  */
 export async function requireUserId(bearerToken?: string): Promise<string> {
+  if (!authConfigured && singleUserModeEnabled) {
+    return DEV_USER_ID;
+  }
   if (!authConfigured && !gateIdentityEnabled()) {
     if (databaseConfigured && !singleUserModeEnabled) {
       throw new Error(
