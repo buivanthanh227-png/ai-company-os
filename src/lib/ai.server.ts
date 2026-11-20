@@ -133,7 +133,7 @@ export async function postJson(
       const status =
         typeof errorObject?.code === "number"
           ? errorObject.code
-          : typeof errorObject?.status === "string" && /^\\d{3}$/.test(errorObject.status)
+          : typeof errorObject?.status === "string" && /^\d{3}$/.test(errorObject.status)
             ? Number(errorObject.status)
             : undefined;
       lastFailure = providerFailure("Provider returned an error payload", status);
