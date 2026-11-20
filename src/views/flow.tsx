@@ -1,7 +1,6 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { Link } from "@tanstack/react-router";
-import { MessagesSquare } from "lucide-react";
-import { AiNetwork } from "@/components/ai-network";
+import { Camera, ImagePlus, MessagesSquare, Mic, Paperclip, X } from "lucide-react";
 import { Meter, PageHeader, PresenceBadge, StaffMark } from "@/components/bits";
 import { Button, Field, Panel, Select, TextArea, TextInput } from "@/components/ui";
 import { staffById } from "@/data/roster";
@@ -31,185 +30,171 @@ const STATUS_LABEL: Record<Task["status"], string> = {
 };
 
 export function CeoView() {
-  const messages = useOs((state) => state.messages);
-  const appendChatMessage = useOs((state) => state.appendChatMessage);
-  const sendLocalChat = useOs((state) => state.sendChat);
-  const tasks = useOs((state) => state.tasks);
-  const projects = useOs((state) => state.projects);
-  const missions = useOs((state) => state.missions);
-  const createMission = useOs((state) => state.createMission);
+  const messages = useOs((s) => s.messages);
+  const appendChatMessage = useOs((s) => s.appendChatMessage);
+  const sendLocalChat = useOs((s) => s.sendChat);
+  const tasks = useOs((s) => s.tasks);
+  const projects = useOs((s) => s.projects);
+  const missions = useOs((s) => s.missions);
+  const createMission = useOs((s) => s.createMission);
   const roster = useRoster();
   const [text, setText] = useState("");
   const [mode, setMode] = useState<"ai" | "local">("ai");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [files, setFiles] = useState<Array<{ file: File; data?: string; content?: string }>>([]);
+  const [listening, setListening] = useState(false);
+  const docRef = useRef<HTMLInputElement>(null);
+  const photoRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const speechRef = useRef<{ stop: () => void } | null>(null);
+
+  async function addFiles(list: FileList | null) {
+    if (!list) return;
+    const next: typeof files = [];
+    for (const file of Array.from(list).slice(0, Math.max(0, 4 - files.length))) {
+      if (file.size > 5 * 1024 * 1024) { setNotice(file.name + " vượt quá 5 MB."); continue; }
+      if (file.type.startsWith("image/")) {
+        const alreadySelected = files.filter((item) => item.data).reduce((total, item) => total + item.file.size, 0);
+        if (alreadySelected + file.size > 2_500_000) {
+          setNotice("Tổng dung lượng ảnh đính kèm không được vượt quá 2,5 MB để gửi ổn định.");
+          continue;
+        }
+        const data = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result ?? ""));
+          reader.onerror = () => reject(new Error("Không đọc được ảnh"));
+          reader.readAsDataURL(file);
+        });
+        next.push({ file, data });
+      } else if (file.type.startsWith("text/") || /\.(txt|md|csv|json)$/i.test(file.name)) {
+        next.push({ file, content: (await file.text()).slice(0, 30000) });
+      } else setNotice("Hiện hỗ trợ ảnh và tệp văn bản TXT, MD, CSV, JSON.");
+    }
+    setFiles((current) => [...current, ...next].slice(0, 4));
+  }
+
+  function toggleVoice() {
+    if (listening) { speechRef.current?.stop(); setListening(false); return; }
+    type Engine = { lang: string; interimResults: boolean; onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null; onerror: (() => void) | null; onend: (() => void) | null; start: () => void; stop: () => void };
+    const w = window as unknown as { SpeechRecognition?: new () => Engine; webkitSpeechRecognition?: new () => Engine };
+    const Ctor = w.SpeechRecognition ?? w.webkitSpeechRecognition;
+    if (!Ctor) { setNotice("Trình duyệt chưa hỗ trợ nhập giọng nói."); return; }
+    const engine = new Ctor();
+    engine.lang = "vi-VN"; engine.interimResults = true;
+    engine.onresult = (e) => setText((v) => v + (v ? " " : "") + Array.from(e.results).map((r) => r[0]?.transcript ?? "").join(""));
+    engine.onerror = () => { setListening(false); setNotice("Không nhận diện được giọng nói. Kiểm tra quyền micro."); };
+    engine.onend = () => setListening(false);
+    speechRef.current = engine;
+    try { engine.start(); setListening(true); setNotice("Đang nghe…"); } catch { setNotice("Không thể bật micro. Kiểm tra quyền truy cập."); }
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const prompt = text.trim();
-    if (!prompt || busy) return;
-    setText("");
-    setNotice("");
-
-    if (mode === "local") {
-      sendLocalChat(prompt);
-      return;
-    }
-
+    if ((!prompt && !files.length) || busy) return;
+    setText(""); setNotice("");
+    const images = files.filter((f) => f.data).map((f) => ({ name: f.file.name, mimeType: f.file.type || "image/jpeg", data: (f.data ?? "").split(",")[1] ?? "" }));
+    const textContent = files.filter((f) => f.content).map((f) => "\n\nNỘI DUNG TỆP " + f.file.name + ":\n" + f.content).join("");
+    const labels = files.length ? "\n[Tệp đính kèm: " + files.map((f) => f.file.name).join(", ") + "]" : "";
+    const message = (prompt || "Vui lòng xem tệp đính kèm.") + textContent;
+    if (mode === "local") { sendLocalChat(message + labels); setFiles([]); return; }
     setBusy(true);
-    const history = messages.slice(-8).map((item) => ({
-      role: item.role === "chairman" ? "user" as const : "assistant" as const,
-      content: item.text,
-    }));
-    const includeWorkspaceContext = /nhân sự|công ty|dự án|nhiệm vụ|công việc|giao việc|báo cáo|hạn mức|token|điều hành|trạng thái hệ thống/i.test(prompt);
+    const history = messages.slice(-8).map((m) => ({ role: m.role === "chairman" ? "user" as const : "assistant" as const, content: m.text }));
+    const includeContext = /nhân sự|công ty|dự án|nhiệm vụ|công việc|giao việc|báo cáo|hạn mức|token|điều hành|trạng thái hệ thống/i.test(prompt);
     const context = [
-      `Nhân sự: ${roster.length}; đang hoạt động: ${roster.filter((person) => person.status === "active").length}; hết hạn mức: ${roster.filter((person) => person.status === "quota_exhausted").length}.`,
-      `Dự án: ${projects.length}; đang hoạt động: ${projects.filter((project) => project.status === "active").length}.`,
-      `Nhiệm vụ: ${tasks.length}; đang mở: ${tasks.filter((task) => !["done", "failed"].includes(task.status)).length}; hoàn thành: ${tasks.filter((task) => task.status === "done").length}; thất bại: ${tasks.filter((task) => task.status === "failed").length}.`,
-      "Các nhiệm vụ gần đây:",
-      ...tasks.slice(0, 10).map((task) => {
-        const person = staffById(roster, task.assigneeId);
-        return `- ${task.title} | ${task.status} | ${person?.name ?? "Chưa phân công"} | ${task.priority}`;
-      }),
-      "Các dự án gần đây:",
-      ...projects.slice(0, 8).map((project) => `- ${project.name} | ${project.status}`),
+      "Nhân sự: " + roster.length + "; đang hoạt động: " + roster.filter((p) => p.status === "active").length + ".",
+      "Dự án: " + projects.length + "; nhiệm vụ: " + tasks.length + ".",
+      ...tasks.slice(0, 8).map((t) => "- " + t.title + " | " + t.status + " | " + (staffById(roster, t.assigneeId)?.name ?? "Chưa phân công")),
     ].join("\n");
-
     try {
       const { sendAiMessage } = await import("@/lib/ai.functions");
-      const result = await sendAiMessage({
-        data: { message: prompt, history, context: includeWorkspaceContext ? context : undefined },
-      });
-      appendChatMessage("chairman", prompt);
+      const result = await sendAiMessage({ data: { message, history, context: includeContext ? context : undefined, attachments: images } });
+      appendChatMessage("chairman", (prompt || "Vui lòng xem tệp đính kèm.") + labels);
       appendChatMessage("ceo", result.text, result.provider);
-      setNotice(
-        result.provider === "gemini"
-          ? "Đã trả lời bằng Google Gemini."
-          : `Đã trả lời bằng OpenRouter${result.fallbackUsed ? " (tuyến dự phòng)" : ""}.`,
-      );
+      setFiles([]);
+      setNotice(result.provider === "gemini" ? "Đã trả lời bằng Google Gemini." : "Đã trả lời bằng OpenRouter" + (result.fallbackUsed ? " (dự phòng)." : "."));
     } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      if (message.includes("Unauthorized")) {
-        appendChatMessage("chairman", prompt);
-        appendChatMessage("ceo", "Phiên đăng nhập chưa hợp lệ. Vui lòng đăng nhập lại rồi thử gửi yêu cầu.", "local");
-        setNotice("Chưa xác thực — không gửi yêu cầu sang bộ điều phối nội bộ.");
-      } else {
-        // Never disguise a failed provider call as a successful local answer.
-        // The user explicitly chose AI chat, so report the failure honestly.
-        appendChatMessage("chairman", prompt);
-        let userMessage = "Hiện chưa kết nối được nhà cung cấp AI. Yêu cầu chưa được xử lý; vui lòng thử lại sau hoặc chuyển sang Lệnh nội bộ nếu bạn muốn thao tác trên dữ liệu điều hành.";
-        if (message.includes("AI_NOT_CONFIGURED")) {
-          userMessage = "Chưa cấu hình khóa AI trên máy chủ. Hãy kiểm tra GEMINI_API_KEY hoặc OPENROUTER_API_KEY trong Vercel rồi triển khai lại.";
-        } else if (message.includes("AI_PROVIDER_UNAVAILABLE:GEMINI")) {
-          userMessage = "Gemini không phản hồi được. Chưa có OpenRouter để dự phòng. Vui lòng kiểm tra khóa và model Gemini trên Vercel.";
-        } else if (message.includes("AI_PROVIDER_UNAVAILABLE:BOTH")) {
-          userMessage = "Cả Gemini và OpenRouter đều không phản hồi được lúc này. Vui lòng thử lại sau hoặc kiểm tra trạng thái nhà cung cấp.";
-        }
-        appendChatMessage("ceo", userMessage, "local");
-        setNotice("Không có câu trả lời AI giả lập: kết nối AI đang lỗi hoặc chưa sẵn sàng.");
-      }
-    } finally {
-      setBusy(false);
-    }
+      const msg = error instanceof Error ? error.message : "";
+      appendChatMessage("chairman", (prompt || "Vui lòng xem tệp đính kèm.") + labels);
+      const answer = msg.includes("Unauthorized")
+        ? "Phiên đăng nhập chưa hợp lệ. Vui lòng đăng nhập lại."
+        : msg.includes("AI_NOT_CONFIGURED")
+          ? "Chưa cấu hình khóa AI trên máy chủ. Hãy kiểm tra cấu hình Vercel."
+          : msg.includes("AI_PROVIDER_UNAVAILABLE:BOTH")
+            ? "Gemini và OpenRouter đều chưa phản hồi. Vui lòng thử lại sau."
+            : "Hiện chưa kết nối được nhà cung cấp AI. Yêu cầu chưa được xử lý.";
+      appendChatMessage("ceo", answer, "local");
+      setNotice("Kết nối AI chưa sẵn sàng.");
+    } finally { setBusy(false); }
   }
 
   return (
     <section className="flex min-h-[calc(100dvh-9rem)] flex-1 flex-col">
       <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col">
-        <AiNetwork roster={roster} tasks={tasks} />
         {messages.length === 0 ? (
-          <div className="my-auto px-2 py-12 text-center">
-            <div className="mx-auto mb-5 grid size-14 place-items-center rounded-2xl border border-line bg-elevated text-accent">
-              <MessagesSquare className="size-7" />
-            </div>
-            <h1 className="text-2xl font-semibold tracking-tight text-fg sm:text-3xl">Tôi có thể giúp gì cho bạn?</h1>
-            <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted">
-              Hỏi đáp, học tập, viết lách, phân tích, lập trình và hỗ trợ công việc. Bạn cứ trò chuyện tự nhiên.
-            </p>
+          <div className="my-auto px-3 py-12 text-center">
+            <div className="mx-auto mb-6 grid size-16 place-items-center rounded-3xl border border-blue-100 bg-blue-50 text-blue-600"><MessagesSquare className="size-8" /></div>
+            <h1 className="text-2xl font-semibold tracking-tight text-fg sm:text-3xl">Chào Chủ tịch Bùi Văn Thanh,</h1>
+            <p className="mx-auto mt-3 max-w-2xl text-lg leading-8 text-muted sm:text-xl">Ngài cần chúng tôi làm việc gì cứ nói nhé.</p>
           </div>
         ) : (
           <div className="flex flex-1 flex-col gap-6 pb-8">
-            {messages.map((message) => (
-              <article key={message.id} className={message.role === "ceo" ? "flex gap-3" : "ml-auto max-w-[88%] rounded-2xl bg-subtle px-4 py-3"}>
-                {message.role === "ceo" ? (
-                  <div className="grid size-8 shrink-0 place-items-center rounded-full border border-line bg-elevated text-accent">
-                    <MessagesSquare className="size-4" />
-                  </div>
-                ) : null}
+            {messages.map((m) => (
+              <article key={m.id} className={m.role === "ceo" ? "flex gap-3" : "ml-auto max-w-[88%] rounded-2xl bg-subtle px-4 py-3"}>
+                {m.role === "ceo" ? <div className="grid size-8 shrink-0 place-items-center rounded-full border border-line bg-elevated text-accent"><MessagesSquare className="size-4" /></div> : null}
                 <div className="min-w-0 flex-1">
-                  {message.role === "ceo" ? (
-                    <p className="mb-1 text-xs font-medium text-muted">
-                      Trợ lý AI · {message.source === "gemini" ? "Gemini" : message.source === "openrouter" ? "OpenRouter" : "Nội bộ"}
-                    </p>
-                  ) : null}
-                  <p className="whitespace-pre-wrap text-sm leading-7 text-fg">{message.text}</p>
-                  {message.role === "chairman" && interpret(message.text).type === "mission" ? (
+                  {m.role === "ceo" ? <p className="mb-1 text-xs font-medium text-muted">Trợ lý AI · {m.source === "gemini" ? "Gemini" : m.source === "openrouter" ? "OpenRouter" : "Nội bộ"}</p> : null}
+                  <p className="whitespace-pre-wrap text-sm leading-7 text-fg">{m.text}</p>
+                  {m.role === "chairman" && interpret(m.text).type === "mission" ? (
                     <div className="mt-2">
-                      {missions.some((mission) => mission.brief === message.text) ? (
-                        <span className="inline-flex rounded-full bg-teal-50 px-3 py-1 text-xs font-medium text-teal-700">
-                          Đã lập kế hoạch
-                        </span>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          className="h-9 px-3 text-sm"
-                          onClick={() => {
-                            const existingProject = projects.find((project) => project.name === "Việc từ phòng CEO");
-                            createMission({
-                              projectId: existingProject?.id ?? "new",
-                              projectName: "Việc từ phòng CEO",
-                              title: message.text.slice(0, 90),
-                              brief: message.text,
-                              kind: detectKind(message.text),
-                              priority: "P1",
-                            });
-                            setNotice("Đã lập kế hoạch và phân công theo năng lực nội bộ. Các AI bên ngoài chưa tự động thực thi nhiệm vụ.");
-                          }}
-                        >
-                          <MessagesSquare className="size-4" />
-                          Lập kế hoạch & phân công
-                        </Button>
+                      {missions.some((mission) => mission.brief === m.text) ? <span className="inline-flex rounded-full bg-teal-50 px-3 py-1 text-xs font-medium text-teal-700">Đã lập kế hoạch</span> : (
+                        <Button type="button" variant="secondary" className="h-9 px-3 text-sm" onClick={() => {
+                          const project = projects.find((p) => p.name === "Việc từ phòng CEO");
+                          createMission({ projectId: project?.id ?? "new", projectName: "Việc từ phòng CEO", title: m.text.slice(0, 90), brief: m.text, kind: detectKind(m.text), priority: "P1" });
+                          setNotice("Đã lập kế hoạch nội bộ. Các AI bên ngoài chưa tự động thực thi.");
+                        }}><MessagesSquare className="size-4" /> Lập kế hoạch & phân công</Button>
                       )}
                     </div>
                   ) : null}
                 </div>
               </article>
             ))}
-            {busy ? (
-              <article className="flex gap-3" aria-live="polite">
-                <div className="grid size-8 shrink-0 place-items-center rounded-full border border-line bg-elevated text-accent">
-                  <MessagesSquare className="size-4" />
-                </div>
-                <p className="pt-1 text-sm text-muted">Đang suy nghĩ...</p>
-              </article>
-            ) : null}
+            {busy ? <p className="text-sm text-muted" aria-live="polite">Trợ lý đang xử lý yêu cầu…</p> : null}
           </div>
         )}
       </div>
       <div className="sticky bottom-0 mx-auto w-full max-w-4xl bg-bg pb-2 pt-3">
-        <form className="rounded-2xl border border-line bg-elevated p-3 shadow-sm" onSubmit={submit}>
-          <TextArea
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-            placeholder={mode === "ai" ? "Nhắn tin cho trợ lý AI..." : "Nhập lệnh điều hành nội bộ..."}
-            disabled={busy}
-          />
+        <form className="rounded-2xl border border-line bg-elevated p-3 shadow-sm sm:p-4" onSubmit={submit}>
+          <TextArea value={text} onChange={(e) => setText(e.target.value)} placeholder={mode === "ai" ? "Ngài muốn giao việc gì cho chúng tôi?" : "Nhập lệnh điều hành nội bộ..."} disabled={busy} />
+          {files.length ? <div className="flex flex-wrap gap-2 px-1 py-2">{files.map((f, i) => (
+            <div key={f.file.name + i} className="flex max-w-full items-center gap-2 rounded-xl border border-line bg-subtle px-2 py-1.5 text-xs">
+              {f.data ? <img src={f.data} alt={f.file.name} className="size-9 rounded-md object-cover" /> : <Paperclip className="size-4 text-accent" />}
+              <span className="max-w-40 truncate">{f.file.name}</span>
+              <button type="button" aria-label={"Bỏ " + f.file.name} onClick={() => setFiles((v) => v.filter((_, n) => n !== i))}><X className="size-3.5" /></button>
+            </div>
+          ))}</div> : null}
           {notice ? <p className="px-2 pb-2 text-xs text-muted" aria-live="polite">{notice}</p> : null}
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-2">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
+            <div className="flex flex-wrap items-center gap-1">
+              <input ref={docRef} type="file" accept=".txt,.md,.csv,.json,text/*" multiple className="hidden" onChange={(e) => { void addFiles(e.target.files); e.target.value = ""; }} />
+              <input ref={photoRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { void addFiles(e.target.files); e.target.value = ""; }} />
+              <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { void addFiles(e.target.files); e.target.value = ""; }} />
+              <Button type="button" variant="ghost" className="h-10 px-3" onClick={() => docRef.current?.click()}><Paperclip className="size-4" /><span className="hidden sm:inline">Đính kèm tệp</span></Button>
+              <Button type="button" variant="ghost" className="h-10 px-3" onClick={() => cameraRef.current?.click()}><Camera className="size-4" /><span className="hidden sm:inline">Chụp ảnh</span></Button>
+              <Button type="button" variant="ghost" className="h-10 px-3" onClick={() => photoRef.current?.click()}><ImagePlus className="size-4" /><span className="hidden sm:inline">Thư viện ảnh</span></Button>
+              <Button type="button" variant={listening ? "secondary" : "ghost"} className="h-10 px-3" onClick={toggleVoice}><Mic className="size-4" /><span className="hidden sm:inline">{listening ? "Đang nghe" : "Giọng nói"}</span></Button>
               <Button type="button" className="h-9 px-3" variant={mode === "ai" ? "secondary" : "ghost"} onClick={() => setMode("ai")}>Chat AI</Button>
               <Button type="button" className="h-9 px-3" variant={mode === "local" ? "secondary" : "ghost"} onClick={() => setMode("local")}>Lệnh nội bộ</Button>
             </div>
-            <Button type="submit" disabled={busy || !text.trim()}>{busy ? "Đang gửi..." : "Gửi"}</Button>
+            <Button type="submit" disabled={busy || (!text.trim() && !files.length)}>{busy ? "Đang gửi..." : "Gửi"}</Button>
           </div>
         </form>
-        <p className="mt-2 text-center text-[11px] text-faint">AI có thể mắc lỗi. Thông tin nhà cung cấp hiển thị dưới mỗi câu trả lời.</p>
+        <p className="mt-2 text-center text-[11px] text-faint">Nhập giọng nói · Tối đa 4 ảnh hoặc tệp văn bản, 5 MB mỗi tệp.</p>
       </div>
     </section>
   );
 }
-
 export function DispatchView() {
   const projects = useOs((state) => state.projects);
   const createMission = useOs((state) => state.createMission);
