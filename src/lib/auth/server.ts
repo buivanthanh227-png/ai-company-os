@@ -47,9 +47,6 @@ import {
   PREVIEW_CLIENT_SECRET,
 } from "./preview";
 
-// Kick (and share) PGLite bootstrap as soon as the auth server module loads.
-void ensureDbReady();
-
 /**
  * Preview secret must outlive module reloads: PGLite (and its session rows) is
  * stored on `globalThis`, so an HMR re-eval of this file must NOT mint a new
@@ -126,6 +123,14 @@ const trustedOrigins: string[] = explicitBaseURL
     ];
 
 const databaseUrl = env("DATABASE_URL");
+
+// Embedded PGLite is for local development/live preview only. A deployed Vercel
+// app must use Neon/Postgres; do not bootstrap WASM when auth is disabled.
+if (authConfigured && !databaseUrl) {
+  void ensureDbReady().catch((error) => {
+    console.error("[auth] Database bootstrap failed; configure DATABASE_URL on Vercel:", error);
+  });
+}
 
 // Static broker OAuth endpoints (skip OIDC discovery on every sign-in / callback).
 // Discovery would cost an extra network hop to the broker before the popup can
