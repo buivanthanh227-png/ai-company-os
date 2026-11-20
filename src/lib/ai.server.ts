@@ -137,27 +137,50 @@ async function callGemini(input: AiChatInput): Promise<AiReply> {
   const apiKey = env("GEMINI_API_KEY");
   if (!apiKey) throw providerFailure("Gemini API key is not configured");
 
-  const model = env("GEMINI_MODEL") ?? "gemini-2.5-flash-lite";
-  const contents = [
-    ...input.history.map((item) => ({
-      role: item.role === "assistant" ? "model" : "user",
-      parts: [{ text: item.content }],
-    })),
-    { role: "user", parts: [{ text: input.message }] },
-  ];
+  // Prefer env override, then try a short list of currently reliable models.
+  // gemini-2.5-flash is deprecated; gemini-2.5-flash-lite is still widely available.
+  const preferred = env("GEMINI_MODEL");
+  const candidates = [
+    preferred,
+    "gemini-2.5-flash-lite",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+  ].filter((m): m is string => Boolean(m));
 
-  const payload = await postJson(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-    { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-    {
-      systemInstruction: { parts: [{ text: buildSystemInstruction(input.context) }] },
-      contents,
-      generationConfig: { maxOutputTokens: MAX_OUTPUT_TOKENS, temperature: 0.4 },
-    },
-  );
-  const text = extractGeminiText(payload);
-  if (!text) throw providerFailure("Gemini returned an empty response");
-  return { text, provider: "gemini", model, fallbackUsed: false };
+  let lastError: ProviderFailure | undefined;
+
+  for (const model of candidates) {
+    try {
+      const contents = [
+        ...input.history.map((item) => ({
+          role: item.role === "assistant" ? "model" : "user",
+          parts: [{ text: item.content }],
+        })),
+        { role: "user", parts: [{ text: input.message }] },
+      ];
+
+      const payload = await postJson(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+        { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+        {
+          systemInstruction: { parts: [{ text: buildSystemInstruction(input.context) }] },
+          contents,
+          generationConfig: { maxOutputTokens: MAX_OUTPUT_TOKENS, temperature: 0.4 },
+        },
+      );
+      const text = extractGeminiText(payload);
+      if (!text) {
+        lastError = providerFailure(`Gemini (${model}) returned empty response`);
+        continue;
+      }
+      return { text, provider: "gemini", model, fallbackUsed: false };
+    } catch (err) {
+      lastError = err as ProviderFailure;
+      // Continue to next model on any failure
+    }
+  }
+
+  throw lastError ?? providerFailure("All Gemini models failed");
 }
 
 async function callOpenRouter(input: AiChatInput, fallbackUsed: boolean): Promise<AiReply> {
