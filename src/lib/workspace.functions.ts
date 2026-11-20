@@ -17,6 +17,9 @@ const snapshotSchema = z.object({
 export const loadWorkspaceSnapshot = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
+    // Do not start the embedded PGlite fallback in a production deployment.
+    // Until Neon is connected, keep using the browser cache without server sync.
+    if (!process.env.DATABASE_URL?.trim()) return null;
     const { getSql } = await import("@/lib/db");
     const sql = await getSql();
     const rows = await sql.query<{ snapshot: unknown }>(
@@ -33,6 +36,9 @@ export const saveWorkspaceSnapshot = createServerFn({ method: "POST" })
     z.object({ snapshot: snapshotSchema }).parse(input),
   )
   .handler(async ({ data, context }) => {
+    if (!process.env.DATABASE_URL?.trim()) {
+      throw new Error("WORKSPACE_DATABASE_NOT_CONFIGURED");
+    }
     const serialized = JSON.stringify(data.snapshot);
     if (new TextEncoder().encode(serialized).byteLength > 1_000_000) {
       throw new Error("Workspace snapshot exceeds the 1 MB storage limit");
