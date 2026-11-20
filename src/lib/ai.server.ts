@@ -34,7 +34,14 @@ function providerFailure(message: string, status?: number): ProviderFailure {
   return error;
 }
 
-async function postJson(url: string, headers: HeadersInit, body: unknown): Promise<unknown> {
+type ProviderDiagnostic = { provider: AiProvider; model: string };
+
+async function postJson(
+  url: string,
+  headers: HeadersInit,
+  body: unknown,
+  diagnostic: ProviderDiagnostic,
+): Promise<unknown> {
   let response: Response;
   try {
     response = await fetch(url, {
@@ -43,18 +50,49 @@ async function postJson(url: string, headers: HeadersInit, body: unknown): Promi
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-  } catch {
+  } catch (err) {
+    const errorName =
+      err && typeof err === "object" && "name" in err && typeof err.name === "string"
+        ? err.name
+        : "NetworkError";
+    console.error("[ai-provider] request failed", {
+      ...diagnostic,
+      failure: errorName === "TimeoutError" || errorName === "AbortError" ? "timeout" : "network",
+    });
     throw providerFailure("Provider network or timeout failure");
   }
 
   if (!response.ok) {
-    // Do not propagate provider response bodies: they can contain internal details.
+    // Parse only non-sensitive provider error identifiers. Never log raw bodies,
+    // prompts, headers, or credentials.
+    let providerCode: string | number | undefined;
+    try {
+      const errorPayload: unknown = await response.json();
+      if (errorPayload && typeof errorPayload === "object" && "error" in errorPayload) {
+        const providerError = errorPayload.error;
+        if (providerError && typeof providerError === "object") {
+          if ("status" in providerError && typeof providerError.status === "string") {
+            providerCode = providerError.status.slice(0, 80);
+          } else if ("code" in providerError && typeof providerError.code === "number") {
+            providerCode = providerError.code;
+          }
+        }
+      }
+    } catch {
+      // The HTTP status remains sufficient for safe diagnostics.
+    }
+    console.error("[ai-provider] HTTP request failed", {
+      ...diagnostic,
+      httpStatus: response.status,
+      providerCode,
+    });
     throw providerFailure("Provider request failed", response.status);
   }
 
   try {
     return await response.json();
   } catch {
+    console.error("[ai-provider] invalid JSON response", diagnostic);
     throw providerFailure("Provider returned invalid JSON");
   }
 }
@@ -138,12 +176,12 @@ async function callGemini(input: AiChatInput): Promise<AiReply> {
   if (!apiKey) throw providerFailure("Gemini API key is not configured");
 
   const preferred = env("GEMINI_MODEL");
+  // Keep an explicit operator override first, then use current Gemini models.
+  // Gemini 2.0/1.5 are retired; 2.5 access is restricted for new projects.
   const candidates = [
     preferred,
-    "gemini-2.5-flash-lite",
-    "gemini-2.0-flash",
-    "gemini-1.5-flash",
-    "gemini-2.5-flash",
+    "gemini-3.8-flash",
+    "gemini-3.5-flash-lite",
   ].filter((m, i, arr): m is string => Boolean(m) && arr.indexOf(m) === i);
 
   const failures: string[] = [];
@@ -166,6 +204,7 @@ async function callGemini(input: AiChatInput): Promise<AiReply> {
           contents,
           generationConfig: { maxOutputTokens: MAX_OUTPUT_TOKENS, temperature: 0.4 },
         },
+        { provider: "gemini", model },
       );
       const text = extractGeminiText(payload);
       if (text) {
@@ -176,6 +215,12 @@ async function callGemini(input: AiChatInput): Promise<AiReply> {
       const failure = err as ProviderFailure;
       const status = failure.status ? ` (HTTP ${failure.status})` : "";
       failures.push(`${model}: ${failure.message}${status}`);
+      // Authentication/permission errors apply to the key, not the model.
+      // A malformed request also will not improve by trying another model.
+      if (failure.status === 400 || failure.status === 401 || failure.status === 403) {
+        break;
+      }
+      // 404 is model-specific: continue to the next supported model.
     }
   }
 
@@ -204,6 +249,7 @@ async function callOpenRouter(input: AiChatInput, fallbackUsed: boolean): Promis
       "X-Title": "AI COMPANY OS",
     },
     { model, messages, max_tokens: MAX_OUTPUT_TOKENS, temperature: 0.4 },
+    { provider: "openrouter", model },
   );
   const text = extractOpenRouterText(payload);
   if (!text) throw providerFailure("OpenRouter returned an empty response");
