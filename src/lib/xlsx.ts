@@ -47,6 +47,7 @@ function sheetXml(rows: string[][]) {
     .map((row, r) => {
       const cells = row
         .map((value, c) => {
+          // eslint-disable-next-line no-control-regex -- XML 1.0 forbids these control characters.
           const text = xmlEscape(value).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
           return `<c r="${colName(c)}${r + 1}" t="inlineStr"><is><t xml:space="preserve">${text}</t></is></c>`;
         })
