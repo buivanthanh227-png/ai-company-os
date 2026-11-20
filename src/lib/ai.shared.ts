@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const aiChatInputSchema = z.object({
   message: z.string().trim().min(1).max(12_000),
+  context: z.string().max(6_000).optional(),
   history: z
     .array(
       z.object({
