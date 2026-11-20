@@ -128,7 +128,7 @@ export function phasesFor(kind: MissionKind, brief: string): PhaseTemplate[] {
   }
   if (kind === "image") {
     return [
-      { phase: "A", title: "Phân tích ảnh và yêu cầu", skill: "H", detail: withBrief("Xác định vùng cần sửa, phần phải giữ nguyên và tiêu chí ảnh đầu ra.") },
+      { phase: "A", title: "Phân tích ảnh và yêu cầu", skill: "N", detail: withBrief("Xác định vùng cần sửa, phần phải giữ nguyên và tiêu chí ảnh đầu ra.") },
       { phase: "B", title: "Chỉnh sửa ảnh gốc", skill: "H", detail: withBrief("Thực hiện chỉnh sửa trực tiếp trên ảnh gốc, không chỉ tạo ảnh mới.") },
       { phase: "C", title: "Soát chất lượng ảnh", skill: "H", detail: withBrief("Kiểm tra vùng đã chỉnh, ánh sáng, bóng, viền và tính tự nhiên.") },
       { phase: "D", title: "Nghiệm thu và báo cáo", skill: "W", detail: withBrief("Nêu công cụ, phần đã sửa, phần còn lỗi và bàn giao tệp ảnh đầu ra.") },
