@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "@tanstack/react-router";
+import { MessagesSquare } from "lucide-react";
 import { Meter, PageHeader, PresenceBadge, StaffMark } from "@/components/bits";
 import { Button, Field, Panel, Select, TextArea, TextInput } from "@/components/ui";
 import { staffById } from "@/data/roster";
@@ -108,59 +109,68 @@ export function CeoView() {
   }
 
   return (
-    <div>
-      <PageHeader
-        kicker="CEO"
-        title="Phòng Chat AI"
-        lede="Trò chuyện AI đa năng như một trợ lý cá nhân: hỏi đáp kiến thức, học tập, viết lách, phân tích, lập trình và mọi chủ đề khác. Khi cần điều hành công ty, bạn có thể chuyển sang Lệnh nội bộ hoặc giao việc tại Trung tâm giao việc."
-      />
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]">
-        <Panel className="flex min-h-[32rem] flex-col">
-          <div className="flex max-h-[32rem] flex-1 flex-col gap-3 overflow-y-auto pr-1">
+    <section className="flex min-h-[calc(100dvh-9rem)] flex-1 flex-col">
+      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col">
+        {messages.length === 0 ? (
+          <div className="my-auto px-2 py-12 text-center">
+            <div className="mx-auto mb-5 grid size-14 place-items-center rounded-2xl border border-line bg-elevated text-accent">
+              <MessagesSquare className="size-7" />
+            </div>
+            <h1 className="text-2xl font-semibold tracking-tight text-fg sm:text-3xl">Tôi có thể giúp gì cho bạn?</h1>
+            <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted">
+              Hỏi đáp, học tập, viết lách, phân tích, lập trình và hỗ trợ công việc. Bạn cứ trò chuyện tự nhiên.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-1 flex-col gap-6 pb-8">
             {messages.map((message) => (
-              <article key={message.id} className={message.role === "ceo" ? "rounded-md border border-line bg-subtle p-3" : "self-end max-w-[40rem] rounded-md bg-bg p-3"}>
-                <p className="font-mono text-xs text-faint">
-                  {message.role === "ceo"
-                    ? message.source === "gemini"
-                      ? "CEO · Gemini"
-                      : message.source === "openrouter"
-                        ? "CEO · OpenRouter"
-                        : "CEO · bộ điều phối nội bộ"
-                    : "Chủ tịch"} · {when(message.at)}
-                </p>
-                <p className="mt-2 text-sm whitespace-pre-wrap text-fg">{message.text}</p>
+              <article key={message.id} className={message.role === "ceo" ? "flex gap-3" : "ml-auto max-w-[88%] rounded-2xl bg-subtle px-4 py-3"}>
+                {message.role === "ceo" ? (
+                  <div className="grid size-8 shrink-0 place-items-center rounded-full border border-line bg-elevated text-accent">
+                    <MessagesSquare className="size-4" />
+                  </div>
+                ) : null}
+                <div className="min-w-0 flex-1">
+                  {message.role === "ceo" ? (
+                    <p className="mb-1 text-xs font-medium text-muted">
+                      Trợ lý AI · {message.source === "gemini" ? "Gemini" : message.source === "openrouter" ? "OpenRouter" : "Nội bộ"}
+                    </p>
+                  ) : null}
+                  <p className="whitespace-pre-wrap text-sm leading-7 text-fg">{message.text}</p>
+                </div>
               </article>
             ))}
             {busy ? (
-              <article className="rounded-md border border-line bg-subtle p-3" aria-live="polite">
-                <p className="font-mono text-xs text-faint">CEO · Gemini Router</p>
-                <p className="mt-2 text-sm text-muted">Đang xử lý yêu cầu...</p>
+              <article className="flex gap-3" aria-live="polite">
+                <div className="grid size-8 shrink-0 place-items-center rounded-full border border-line bg-elevated text-accent">
+                  <MessagesSquare className="size-4" />
+                </div>
+                <p className="pt-1 text-sm text-muted">Đang suy nghĩ...</p>
               </article>
             ) : null}
           </div>
-          <form className="mt-3 flex flex-col gap-2" onSubmit={submit}>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs text-muted">Chế độ:</span>
-              <Button type="button" variant={mode === "ai" ? "primary" : "secondary"} onClick={() => setMode("ai")}>Chat AI đa năng</Button>
-              <Button type="button" variant={mode === "local" ? "primary" : "secondary"} onClick={() => setMode("local")}>Lệnh nội bộ</Button>
-            </div>
-            <TextArea value={text} onChange={(event) => setText(event.target.value)} placeholder={mode === "ai" ? "Hỏi bất cứ điều gì..." : "Nhập lệnh điều hành hoặc báo cáo..."} disabled={busy} />
-            {notice ? <p className="text-xs text-muted" aria-live="polite">{notice}</p> : null}
-            <div className="flex flex-wrap gap-2">
-              <Button type="submit" disabled={busy || !text.trim()}>{busy ? "Đang gửi..." : "Gửi"}</Button>
-              <Button variant="secondary" onClick={() => setText("Sửa ứng dụng học tiếng Trung, người học không mở được bài hội thoại sau HSK 1.")}>
-                Việc mẫu
-              </Button>
-              <Button variant="ghost" onClick={() => { setText("Báo cáo"); setMode("local"); }}>Báo cáo nội bộ</Button>
-            </div>
-          </form>
-        </Panel>
-        <Panel>
-          <h2 className="text-sm font-medium">Lệnh nhận được</h2>
-          <p className="mt-2 text-sm whitespace-pre-wrap text-muted">{helpText()}</p>
-        </Panel>
+        )}
       </div>
-    </div>
+      <div className="sticky bottom-0 mx-auto w-full max-w-3xl bg-bg pb-2 pt-3">
+        <form className="rounded-2xl border border-line bg-elevated p-3 shadow-sm" onSubmit={submit}>
+          <TextArea
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            placeholder={mode === "ai" ? "Nhắn tin cho trợ lý AI..." : "Nhập lệnh điều hành nội bộ..."}
+            disabled={busy}
+          />
+          {notice ? <p className="px-2 pb-2 text-xs text-muted" aria-live="polite">{notice}</p> : null}
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-2">
+            <div className="flex items-center gap-2">
+              <Button type="button" size="sm" variant={mode === "ai" ? "secondary" : "ghost"} onClick={() => setMode("ai")}>Chat AI</Button>
+              <Button type="button" size="sm" variant={mode === "local" ? "secondary" : "ghost"} onClick={() => setMode("local")}>Lệnh nội bộ</Button>
+            </div>
+            <Button type="submit" disabled={busy || !text.trim()}>{busy ? "Đang gửi..." : "Gửi"}</Button>
+          </div>
+        </form>
+        <p className="mt-2 text-center text-[11px] text-faint">AI có thể mắc lỗi. Thông tin nhà cung cấp hiển thị dưới mỗi câu trả lời.</p>
+      </div>
+    </section>
   );
 }
 

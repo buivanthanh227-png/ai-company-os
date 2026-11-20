@@ -7,7 +7,7 @@ import { ActivityView, DocsView, ReportsView, SettingsView } from "@/views/syste
 
 export const Route = createFileRoute("/")({
   validateSearch: (search: Record<string, unknown>): AppSearch => ({
-    view: typeof search.view === "string" && search.view ? search.view : "overview",
+    view: typeof search.view === "string" && search.view ? search.view : "ceo",
     id: typeof search.id === "string" ? search.id : "",
     q: typeof search.q === "string" ? search.q : "",
   }),
