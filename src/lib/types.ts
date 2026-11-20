@@ -161,6 +161,7 @@ export type ChatMessage = {
   at: string;
   role: "chairman" | "ceo";
   text: string;
+  source?: "local" | "gemini" | "openrouter";
 };
 
 export type Settings = {
