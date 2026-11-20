@@ -59,7 +59,6 @@ type OsState = Snapshot & {
   addProject: (name: string, summary: string) => void;
   setProjectStatus: (id: string, status: Project["status"]) => void;
   setOrgName: (orgName: string) => void;
-  setKey: (name: string, value: string) => void;
   importSnapshot: (snapshot: Snapshot) => void;
   reset: () => void;
 };
@@ -450,17 +449,11 @@ export const useOs = create<OsState>()(
         });
       },
       setOrgName: (orgName) => set({ settings: { ...get().settings, orgName } }),
-      setKey: (name, value) => {
-        const settings = get().settings;
-        set({
-          settings: { ...settings, keys: { ...settings.keys, [name]: value } },
-          notice: "Đã lưu trên trình duyệt này. Khóa không được gửi đi.",
-        });
-      },
       importSnapshot: (snapshot) => {
         set({
           ...snapshot,
-          notice: "Đã nhập bản dữ liệu. Khóa vẫn chỉ nằm trên máy này.",
+          settings: { ...snapshot.settings, keys: {} },
+          notice: "Đã nhập bản dữ liệu. API key không được nhập hoặc lưu trong trình duyệt.",
         });
       },
       reset: () => {
@@ -484,7 +477,7 @@ export const useOs = create<OsState>()(
         activity: state.activity,
         messages: state.messages,
         proposals: state.proposals,
-        settings: state.settings,
+        settings: { ...state.settings, keys: {} },
       }),
     },
   ),
