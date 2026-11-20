@@ -7,7 +7,8 @@
 - Nếu chỉ cấu hình OpenRouter, gateway có thể chạy qua `openrouter/free`.
 - API key chỉ đọc từ biến môi trường của Vercel/server.
 - Server function dùng `authMiddleware`; không mở endpoint AI công khai cho khách chưa xác thực.
-- Chat CEO hiện tại vẫn giữ bộ điều phối cục bộ. Lát cắt này cung cấp gateway và phép thử kết nối; việc chuyển hội thoại CEO sang AI thật là bước kế tiếp sau khi xác minh cấu hình triển khai.
+- Chat CEO đã có chế độ AI Router: Gemini trước, OpenRouter dự phòng; gửi tối đa 8 lượt hội thoại gần nhất và bản tóm tắt trạng thái dự án/nhiệm vụ. Chế độ lệnh nội bộ cũ vẫn được giữ để xem báo cáo và tạo việc theo luật cục bộ.
+- Chat AI chỉ tư vấn/trả lời, chưa tự tạo task hay sửa dữ liệu. Phân công chính thức vẫn qua Trung tâm giao việc.
 
 ## Biến môi trường Vercel
 
@@ -46,9 +47,17 @@ Sau khi thêm biến môi trường, redeploy để serverless functions nhận 
 - Cấu hình ít nhất một API key ở Vercel.
 - Mở Cài đặt và chạy phép thử kết nối AI. Kết quả phải trả về provider/model thật.
 
+## Chat CEO — lát cắt 2.2
+
+- Chọn **AI Router** để gọi server function; câu trả lời hiển thị nguồn Gemini hoặc OpenRouter.
+- Chọn **Lệnh nội bộ** để giữ hành vi cũ: báo cáo, xem hàng đợi, tìm nhân sự, thay đổi trạng thái vận hành và tạo nhiệm vụ theo parser nội bộ.
+- Nếu gateway chưa cấu hình hoặc nhà cung cấp không khả dụng, chế độ AI tự quay về bộ điều phối nội bộ và hiển thị thông báo.
+- Context gửi lên AI gồm số liệu tổng hợp nhân sự/dự án/nhiệm vụ, tối đa 10 nhiệm vụ và 8 dự án gần đây; không gửi toàn bộ kho dữ liệu.
+- Nội dung hội thoại và context được gửi tới nhà cung cấp AI đang xử lý. Không đưa bí mật, mật khẩu hoặc dữ liệu nhạy cảm vào chat.
+
 ## Hạn chế hiện tại
 
 - Chưa có hàng đợi bền, ghi nhận token/chi phí thực tế, giới hạn tốc độ dùng chung giữa các instance hoặc dashboard lịch sử gọi API.
 - Fallback là chuyển provider khi lỗi phù hợp; không bảo đảm OpenRouter luôn có model miễn phí khả dụng.
 - Free tier của OpenRouter có giới hạn riêng; model miễn phí có thể bị giới hạn bởi nhà cung cấp. Không xem đây là SLA.
-- Chat CEO và việc phân công vẫn chạy logic cục bộ cho tới lát cắt tích hợp kế tiếp.
+- AI Chat chưa có quyền gọi công cụ để tự tạo nhiệm vụ, thay đổi trạng thái hoặc commit mã; các hành động đó vẫn cần quy trình riêng.
