@@ -81,7 +81,7 @@ export function reportText(roster: LiveStaff[], tasks: Task[]) {
   const low = roster.filter((person) => presenceOf(person) === "degraded").length;
   const empty = roster.filter((person) => presenceOf(person) === "quota_exhausted").length;
   const wait = roster.filter((person) => presenceOf(person) === "standby").length;
-  const open = tasks.filter((task) => task.status === "queued" || task.status === "assigned" || task.status === "running" || task.status === "review");
+  const open = tasks.filter((task) => task.status === "queued" || task.status === "assigned" || task.status === "handed_off" || task.status === "running" || task.status === "review");
   const queued = tasks.filter((task) => task.status === "queued");
   const done = tasks.filter((task) => task.status === "done").length;
   const lines = [
