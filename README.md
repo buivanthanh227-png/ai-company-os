@@ -1,6 +1,6 @@
 # AI COMPANY OS
 
-Trung tâm điều hành nhiều công cụ trí tuệ nhân tạo. Giai đoạn này là giao diện vận hành đầy đủ: danh mục nhân sự, lập kế hoạch, phân công theo kỹ năng, chuyển giao khi hết hạn mức và lưu dữ liệu trên trình duyệt.
+Trung tâm điều hành nhiều công cụ trí tuệ nhân tạo. Giao diện hiện có danh mục AI, lập kế hoạch, phân công theo kỹ năng và chuyển giao. Khi Neon/Postgres được kết nối, trạng thái workspace được đồng bộ giữa các thiết bị; trình duyệt vẫn giữ một bản cache cục bộ.
 
 Danh mục kiểm tra ngày 2026-11-20. Hạn mức token công khai mà phiên kiểm tra không xác minh được thì ghi «chưa xác minh», không bịa số. Dấu trên thẻ nhân sự là ký tự nội bộ, không phải logo thương hiệu. Website chính thức nằm trong hồ sơ.
 
@@ -8,11 +8,13 @@ Danh mục kiểm tra ngày 2026-11-20. Hạn mức token công khai mà phiên 
 
 - Toàn bộ menu, tìm kiếm, lọc, hồ sơ, sơ đồ tổ chức, bảng điều hành bên phải.
 - Bộ chấm điểm và phân công cục bộ; chuyển giao mô phỏng khi hết hạn mức, timeout, rate limit, lỗi API hoặc lỗi xác thực.
-- Lưu trên trình duyệt, xuất Excel, CSV và JSON.
+- Cache trên trình duyệt, xuất Excel, CSV và JSON.
+- Snapshot workspace được đồng bộ lên Postgres khi Neon được kết nối và migration hoàn tất.
 - Backend gateway Gemini Router đã được bổ sung trong Giai đoạn 2: Gemini chính, OpenRouter dự phòng; server functions yêu cầu xác thực.
 
 ## Chưa được xác minh trên môi trường production
 
+- Cần kết nối Neon/Postgres và chạy migration `app_state` để bật đồng bộ dữ liệu nhiều thiết bị.
 - Chưa có bằng chứng Vercel production đã được cấu hình biến môi trường và gọi thành công Gemini/OpenRouter.
 - Chat CEO đã có chế độ AI Router gọi Gemini/OpenRouter qua server; chế độ lệnh nội bộ cũ vẫn còn. AI Chat chưa tự phân công hoặc thay đổi dữ liệu.
 - Chưa có hàng đợi bền, số liệu token/chi phí thực tế hoặc rate limit dùng chung giữa các serverless instances.
