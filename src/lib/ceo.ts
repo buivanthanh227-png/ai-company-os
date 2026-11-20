@@ -16,7 +16,7 @@ const SKILL_WORDS: [RegExp, SkillKey][] = [
   [/giao diện|\bui\b|frontend/, "U"],
   [/kiểm thử|test/, "E"],
   [/bảo mật|security/, "S"],
-  [/hình ảnh|hình\b|logo|poster/, "H"],
+  [/hình ảnh|hình\b|ảnh|logo|poster|xóa vật thể|xoá vật thể|xóa nền|xoá nền|chỉnh ảnh/, "H"],
   [/video|clip|phim/, "V"],
   [/giọng|âm thanh|nhạc|lồng tiếng/, "A"],
   [/dịch/, "D"],
