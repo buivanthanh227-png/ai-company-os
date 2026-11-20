@@ -130,7 +130,7 @@ test("dispatch fails closed without matching approval and on duplicate runtime I
 });
 
 test("dispatch waits for every dependency and rejects unknown dependencies", () => {
-  const parent = { ...task("parent"), status: "running" as const };
+  const parent: RuntimeTask = { ...task("parent"), status: "running" };
   const child = task("child", ["parent"]);
   assert.equal(isTaskDispatchable(child, [parent, child]), false);
   parent.status = "succeeded";
