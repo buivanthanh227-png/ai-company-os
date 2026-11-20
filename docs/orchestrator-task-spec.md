@@ -1,10 +1,10 @@
 # Đặc tả kỹ thuật: orchestrateTask
 
-**Trạng thái:** Đã triển khai một phần lớp phân công và chuyển giao thủ công trong Chat CEO. Worker gọi AI ngoài, hàng đợi bền vững, thực thi đa provider tự động và Critic loop vẫn chưa triển khai.  
+**Trạng thái:** Đã triển khai một phần lớp phân công/chuyển giao thủ công và các primitive thuần cho kiểm tra kế hoạch, dependency, approval gate, trạng thái task. Worker gọi AI ngoài, hàng đợi bền vững, thực thi đa provider tự động, lưu output và Critic loop vẫn chưa triển khai.  
 **Phạm vi:** Giai đoạn 2; backend-first, provider-agnostic, ưu tiên model miễn phí.  
 **Nguyên tắc:** Không tự thực thi hành động bên ngoài, không gọi model trả phí, không ghi đè dữ liệu gốc khi chưa được duyệt.
 
-## 1. Mục tiêu và ranh giới
+## 1. Mục tiêu và ranh giới\n\n### Phần lõi đã được thêm trên nhánh phát triển\n\n`src/lib/orchestrator/core.ts` cung cấp các hàm thuần, chưa được nối vào runtime: kiểm tra schema/version và giới hạn số task; kiểm tra ID trùng, dependency không tồn tại, self-dependency và chu trình; xác định task đủ điều kiện dispatch khi dependency đã `succeeded` và approval đã được cấp; kiểm soát chuyển trạng thái theo allowlist. Unit tests tương ứng được đưa vào `test:ci`. Các primitive này không gọi provider, không ghi DB, không tạo queue và không tự chạy task.\n\nNhánh triển khai phải giữ feature chưa bật mặc định cho đến khi có persistence, worker, provider adapter, auth/approval gate và kiểm thử tích hợp.
 
 ### Trạng thái runtime hiện tại
 
