@@ -23,7 +23,7 @@ import {
 import { BrandMark } from "@/components/bits";
 import { OpsRail } from "@/components/ops-rail";
 import { cn } from "@/lib/cn";
-import { useOs } from "@/lib/store";
+import { getSnapshot, useOs } from "@/lib/store";
 
 export type AppSearch = { view: string; id: string; q: string };
 
@@ -118,7 +118,7 @@ function Side({ search, onPick }: { search: AppSearch; onPick?: () => void }) {
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
         <NavLinks search={search} onPick={onPick} />
       </div>
-      <p className="border-t border-line px-4 py-3 text-xs text-faint">Giai đoạn 1 · điều phối nội bộ · chưa gọi API</p>
+      <p className="border-t border-line px-4 py-3 text-xs text-faint">AI COMPANY OS · dữ liệu đồng bộ qua máy chủ</p>
     </div>
   );
 }
@@ -132,9 +132,51 @@ export function Shell({ search, children }: { search: AppSearch; children: React
   const navigate = useNavigate();
 
   useEffect(() => {
-    void Promise.resolve(useOs.persist.rehydrate()).then(() => {
-      useOs.getState().markHydrated();
-    });
+    let active = true;
+    let unsubscribe: (() => void) | undefined;
+    let saveTimer: number | undefined;
+
+    const syncWorkspace = async () => {
+      await Promise.resolve(useOs.persist.rehydrate());
+      try {
+        const { loadWorkspaceSnapshot, saveWorkspaceSnapshot } = await import("@/lib/workspace.functions");
+        const remote = await loadWorkspaceSnapshot();
+        if (!active) return;
+        if (remote) {
+          useOs.getState().importSnapshot(remote);
+        } else {
+          await saveWorkspaceSnapshot({ data: { snapshot: getSnapshot() } });
+        }
+
+        let previous = JSON.stringify(getSnapshot());
+        unsubscribe = useOs.subscribe(() => {
+          if (!active) return;
+          const next = JSON.stringify(getSnapshot());
+          if (next === previous) return;
+          previous = next;
+          if (saveTimer !== undefined) window.clearTimeout(saveTimer);
+          saveTimer = window.setTimeout(() => {
+            void saveWorkspaceSnapshot({ data: { snapshot: getSnapshot() } }).catch(() => {
+              useOs.getState().setNotice("Không đồng bộ được dữ liệu lên máy chủ. Dữ liệu trên trình duyệt vẫn còn.");
+            });
+          }, 900);
+        });
+      } catch (error) {
+        console.error("[workspace] remote sync unavailable:", error);
+        if (active) {
+          useOs.getState().setNotice("Chưa kết nối được kho dữ liệu máy chủ. Dữ liệu hiện tại vẫn lưu trên trình duyệt này.");
+        }
+      } finally {
+        if (active) useOs.getState().markHydrated();
+      }
+    };
+
+    void syncWorkspace();
+    return () => {
+      active = false;
+      unsubscribe?.();
+      if (saveTimer !== undefined) window.clearTimeout(saveTimer);
+    };
   }, []);
 
   useEffect(() => {
