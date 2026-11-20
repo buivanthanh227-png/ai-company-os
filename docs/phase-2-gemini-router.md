@@ -18,7 +18,7 @@ Thiết lập trong Project → Settings → Environment Variables. Không đặ
 | Biến | Bắt buộc | Giá trị |
 |---|---|---|
 | `GEMINI_API_KEY` | Có nếu dùng Gemini chính | API key tạo từ Google AI Studio |
-| `GEMINI_MODEL` | Không | Mặc định `gemini-2.5-flash` |
+| `GEMINI_MODEL` | Không | Mặc định `gemini-2.5-flash-lite` |
 | `OPENROUTER_API_KEY` | Khuyến nghị | API key OpenRouter để dự phòng |
 | `OPENROUTER_MODEL` | Không | Mặc định `openrouter/free` |
 | `BETTER_AUTH_URL` | Khi bật đăng nhập | URL triển khai chính thức, ví dụ `https://your-domain.vercel.app` |
