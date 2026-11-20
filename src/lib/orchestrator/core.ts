@@ -217,7 +217,7 @@ export function isTaskDispatchable(
   if (task.status !== "queued") return false;
   if (!Array.isArray(task.dependsOn) || !Number.isInteger(task.revision) || task.revision < 1 || !task.contentHash) return false;
   if (new Set(allTasks.map((item) => item.id)).size !== allTasks.length) return false;
-  if (!allTasks.some((item) => item === task)) return false;
+  if (!allTasks.some((item) => item.id === task.id)) return false;
   if (task.approvalRequired && !approvals.some((approval) => matchesApproval(task, approval, nowMs))) return false;
   const byId = new Map(allTasks.map((item) => [item.id, item]));
   return task.dependsOn.every((id) => byId.get(id)?.status === "succeeded");
