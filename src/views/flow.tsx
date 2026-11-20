@@ -1,6 +1,6 @@
 import { useRef, useState, type FormEvent } from "react";
 import { Link } from "@tanstack/react-router";
-import { Camera, ImagePlus, MessagesSquare, Mic, Paperclip, X } from "lucide-react";
+import { Camera, ClipboardCopy, ExternalLink, ImagePlus, MessagesSquare, Mic, Paperclip, X } from "lucide-react";
 import { Meter, PageHeader, PresenceBadge, StaffMark } from "@/components/bits";
 import { Button, Field, Panel, Select, TextArea, TextInput } from "@/components/ui";
 import { staffById } from "@/data/roster";
@@ -22,7 +22,8 @@ import {
 
 const STATUS_LABEL: Record<Task["status"], string> = {
   queued: "Hàng đợi",
-  assigned: "Đã giao",
+  assigned: "Sẵn sàng chuyển giao",
+  handed_off: "Đã chuyển AI · chờ kết quả",
   running: "Đang làm",
   review: "Đang soát",
   done: "Xong",
@@ -287,6 +288,49 @@ export function DispatchView() {
   );
 }
 
+function TaskHandoff({ task, missionBrief, person }: { task: Task; missionBrief: string; person: ReturnType<typeof staffById> }) {
+  const setStatus = useOs((state) => state.setTaskStatus);
+  const saveResult = useOs((state) => state.saveTaskResult);
+  const setNotice = useOs((state) => state.setNotice);
+  const [result, setResult] = useState("");
+  const prompt = [
+    "Bạn là AI được CEO AI COMPANY OS giao một phần việc cụ thể. Hãy làm đúng phạm vi, không tự mở rộng.",
+    "NHIỆM VỤ: " + task.title,
+    "MỤC TIÊU CHUNG: " + missionBrief,
+    "PHẦN VIỆC CỦA BẠN: " + task.detail,
+    "NGỮ CẢNH: " + task.context,
+    "YÊU CẦU BÀN GIAO: Trả kết quả cụ thể, nêu phần đã làm, phần chưa làm và hạn chế. Nếu là chỉnh ảnh, phải xuất ảnh đã chỉnh sửa; không chỉ mô tả cách làm.",
+    "LƯU Ý: Ảnh/tệp gốc không được tự chuyển giữa các website. Chủ tịch sẽ tự đính kèm lại tệp gốc trong cửa sổ công cụ bên ngoài. Không tuyên bố hoàn thành nếu chưa tạo được đầu ra.",
+  ].join("\n\n");
+  async function copyPrompt() {
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setNotice("Đã sao chép brief. Mở AI được giao, dán brief và đính kèm tệp gốc.");
+    } catch {
+      setNotice("Không truy cập được clipboard. Hãy chọn và sao chép nội dung brief từ hồ sơ nhiệm vụ.");
+    }
+  }
+  return (
+    <div className="mt-3 rounded-xl border border-line bg-subtle p-3">
+      <p className="text-xs font-semibold text-fg">Chuyển giao cho AI bên ngoài</p>
+      <p className="mt-1 text-xs leading-5 text-muted">Đây là giao việc qua tài khoản website, chưa phải lệnh gọi API tự động. Chủ tịch cần dán brief và đính kèm lại ảnh/tệp gốc.</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <Button type="button" variant="secondary" className="h-9 px-3 text-xs" onClick={() => void copyPrompt()}><ClipboardCopy className="size-3.5" /> Sao chép brief</Button>
+        {person?.website ? <a href={person.website} target="_blank" rel="noopener noreferrer" className="inline-flex h-9 items-center gap-2 rounded-md border border-line bg-elevated px-3 text-xs font-medium text-fg"><ExternalLink className="size-3.5" /> Mở {person.name}</a> : <span className="inline-flex h-9 items-center rounded-md px-2 text-xs text-warn">Chưa có website xác minh</span>}
+        {task.status === "assigned" && person ? <Button type="button" className="h-9 px-3 text-xs" onClick={() => setStatus(task.id, "handed_off")}>Đã gửi cho AI</Button> : null}
+      </div>
+      {task.status === "handed_off" ? (
+        <div className="mt-3 flex flex-col gap-2">
+          <p className="text-xs font-medium text-fg">Khi AI trả kết quả, dán phần trả lời hoặc đường dẫn tệp vào đây để CEO kiểm tra.</p>
+          <TextArea value={result} onChange={(event) => setResult(event.target.value)} placeholder="Dán kết quả AI, đường dẫn tệp hoặc ghi chú bàn giao..." />
+          <div><Button type="button" disabled={!result.trim()} onClick={() => { saveResult(task.id, result); setResult(""); }}>Gửi kết quả về CEO soát</Button></div>
+        </div>
+      ) : null}
+      {task.result ? <div className="mt-3 rounded-lg border border-line bg-elevated p-3"><p className="text-xs font-semibold text-fg">Kết quả đã nhận</p><p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-muted">{task.result}</p></div> : null}
+    </div>
+  );
+}
+
 function TaskActions({ task }: { task: Task }) {
   const affect = useOs((state) => state.affectTask);
   const setStatus = useOs((state) => state.setTaskStatus);
@@ -299,18 +343,15 @@ function TaskActions({ task }: { task: Task }) {
   ];
   return (
     <div className="flex flex-wrap gap-2">
-      {task.status === "assigned" || task.status === "queued" ? (
-        <Button onClick={() => setStatus(task.id, "running")} disabled={!task.assigneeId}>Bắt đầu</Button>
-      ) : null}
       {task.status === "running" ? <Button variant="secondary" onClick={() => setStatus(task.id, "review")}>Đưa sang soát</Button> : null}
-      {task.status === "running" || task.status === "review" || task.status === "assigned" ? (
+      {task.status === "running" || task.status === "review" ? (
         <Button variant="secondary" onClick={() => setStatus(task.id, "done")} disabled={!task.assigneeId}>Hoàn thành</Button>
       ) : null}
-      {task.status !== "done" ? (
-        <Button variant="danger" onClick={() => setStatus(task.id, "failed")}>Thất bại</Button>
+      {task.status !== "done" && task.status !== "failed" ? (
+        <Button variant="danger" onClick={() => setStatus(task.id, "failed")}>Đánh dấu thất bại</Button>
       ) : null}
       {reasons.map(([reason, label]) => (
-        <Button key={reason} variant="ghost" onClick={() => affect(task.id, reason)} disabled={task.status === "done"}>
+        <Button key={reason} variant="ghost" onClick={() => affect(task.id, reason)} disabled={task.status === "done" || task.status === "failed"}>
           {label}
         </Button>
       ))}
@@ -332,7 +373,7 @@ export function TasksView() {
       <PageHeader
         kicker="Nhiệm vụ"
         title="Theo dõi và chuyển giao"
-        lede="Hết hạn mức thì ghi trạng thái, giữ nguyên ngữ cảnh và giao cho người kế tiếp. Timeout, rate limit và lỗi API được thử lại một lần trước khi chuyển. Lỗi xác thực chuyển ngay."
+        lede="Theo dõi từng pha từ lúc được phân công, chuyển cho AI bên ngoài, nhận kết quả đến CEO soát xét. Trạng thái chỉ đổi khi có thao tác xác nhận; không giả lập AI bên ngoài đang chạy."
       />
       <div className="mb-3 grid gap-3 sm:grid-cols-2">
         <Field label="Dự án">
@@ -385,6 +426,7 @@ export function TasksView() {
                         )}
                       </div>
                       <p className="mt-3 text-sm whitespace-pre-wrap text-muted">{task.context}</p>
+                      {person && task.status !== "done" && task.status !== "failed" ? <TaskHandoff task={task} missionBrief={mission.brief} person={person} /> : null}
                       {task.triedIds.length ? (
                         <p className="mt-2 text-xs text-faint">Đã đi qua: {task.triedIds.map((id) => staffById(roster, id)?.name ?? id).join(" → ")}</p>
                       ) : null}
