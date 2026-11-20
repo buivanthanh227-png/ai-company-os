@@ -4,7 +4,6 @@ import { MessagesSquare } from "lucide-react";
 import { Meter, PageHeader, PresenceBadge, StaffMark } from "@/components/bits";
 import { Button, Field, Panel, Select, TextArea, TextInput } from "@/components/ui";
 import { staffById } from "@/data/roster";
-import { helpText } from "@/lib/ceo";
 import { rankForSkill } from "@/lib/engine";
 import { when } from "@/lib/format";
 import { useOs, useRoster } from "@/lib/store";
