@@ -20,10 +20,12 @@ const databaseConfigured = Boolean(process.env.DATABASE_URL?.trim());
  * deployments. The project must keep Vercel Deployment Protection (SSO)
  * enabled and must not attach an unprotected custom domain.
  */
-const singleUserModeEnabled =
-  process.env.SINGLE_USER_MODE === "true" &&
+const isProtectedVercelDeployment =
   process.env.VERCEL === "1" &&
   (process.env.VERCEL_ENV === "production" || process.env.VERCEL_ENV === "preview");
+
+const singleUserModeEnabled =
+  process.env.SINGLE_USER_MODE === "true" && isProtectedVercelDeployment;
 
 /** Re-export so callers can branch on it without importing `server.ts`. */
 export { authConfigured };
@@ -96,6 +98,12 @@ export async function requireUserId(bearerToken?: string): Promise<string> {
     return DEV_USER_ID;
   }
   if (!authConfigured && !gateIdentityEnabled()) {
+    if (isProtectedVercelDeployment && !singleUserModeEnabled) {
+      throw new Error(
+        "Auth is disabled on Vercel. Explicitly configure protected single-owner mode " +
+          "or enable authenticated access.",
+      );
+    }
     if (databaseConfigured && !singleUserModeEnabled) {
       throw new Error(
         "Auth is disabled while DATABASE_URL is set. Enable authenticated access " +
