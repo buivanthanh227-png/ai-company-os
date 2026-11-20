@@ -6,6 +6,7 @@ import { when } from "@/lib/format";
 import { useOs, useRoster } from "@/lib/store";
 import type { Snapshot } from "@/lib/store";
 import { buildXlsx, downloadBlob, toCsv } from "@/lib/xlsx";
+import { checkAiConnection } from "@/lib/ai.functions";
 
 const DOCS = [
   {
@@ -32,17 +33,6 @@ const DOCS = [
     title: "Triển khai",
     body: "Giao diện đang chạy trong bản xem trước. Khi xuất bản, ứng dụng đi theo nền tảng web có máy chủ, không phải một file HTML tĩnh. Kho tài liệu trong ứng dụng là bản hướng dẫn vận hành. Excel danh mục xuất từ Cài đặt, kèm trạng thái hiện tại.",
   },
-];
-
-const KEYS = [
-  ["openai", "OpenAI"],
-  ["anthropic", "Anthropic"],
-  ["google", "Google"],
-  ["xai", "xAI"],
-  ["deepseek", "DeepSeek"],
-  ["groq", "Groq"],
-  ["openrouter", "OpenRouter"],
-  ["elevenlabs", "ElevenLabs"],
 ];
 
 export function DocsView() {
@@ -112,11 +102,35 @@ export function SettingsView() {
   const roster = useRoster();
   const settings = useOs((state) => state.settings);
   const setOrgName = useOs((state) => state.setOrgName);
-  const setKey = useOs((state) => state.setKey);
   const reset = useOs((state) => state.reset);
   const importSnapshot = useOs((state) => state.importSnapshot);
   const [armed, setArmed] = useState(false);
   const [org, setOrg] = useState(settings.orgName);
+  const [aiChecking, setAiChecking] = useState(false);
+  const [aiStatus, setAiStatus] = useState("");
+  const [aiError, setAiError] = useState("");
+
+  async function runAiCheck() {
+    setAiChecking(true);
+    setAiStatus("");
+    setAiError("");
+    try {
+      const result = await checkAiConnection();
+      const provider = result.provider === "gemini" ? "Google Gemini" : "OpenRouter";
+      setAiStatus(`Kết nối thành công: ${provider} · ${result.model}${result.fallbackUsed ? " · đã dùng tuyến dự phòng" : ""}.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      setAiError(
+        message === "AI_NOT_CONFIGURED"
+          ? "Chưa cấu hình GEMINI_API_KEY hoặc OPENROUTER_API_KEY trong Vercel."
+          : message === "Unauthorized"
+            ? "Cần đăng nhập hợp lệ trước khi gọi AI."
+            : "Chưa kết nối được AI. Kiểm tra biến môi trường, xác thực và nhật ký Vercel.",
+      );
+    } finally {
+      setAiChecking(false);
+    }
+  }
 
   function exportExcel() {
     downloadBlob(buildXlsx(catalogRows(roster)), "nhan-su-ai.xlsx");
@@ -141,7 +155,7 @@ export function SettingsView() {
 
   return (
     <div>
-      <PageHeader kicker="Hệ thống" title="Cài đặt và tích hợp" lede="Khóa chỉ lưu trên trình duyệt này. Giai đoạn 1 không gửi khóa đi đâu và không gọi API." />
+      <PageHeader kicker="Hệ thống" title="Cài đặt và tích hợp" lede="API key được giữ ở biến môi trường phía máy chủ Vercel, không nhập trong trình duyệt." />
       <div className="grid gap-3 xl:grid-cols-2">
         <Panel className="flex flex-col gap-3">
           <h2 className="text-sm font-medium">Tổ chức</h2>
@@ -175,20 +189,13 @@ export function SettingsView() {
           </label>
         </Panel>
         <Panel className="flex flex-col gap-3 xl:col-span-2">
-          <h2 className="text-sm font-medium">Kho khóa cho giai đoạn sau</h2>
-          <p className="text-sm text-danger">Không dán khóa thật nếu máy này không phải máy của anh. Ô này không kết nối và không kiểm tra với nhà cung cấp.</p>
-          <div className="grid gap-3 md:grid-cols-2">
-            {KEYS.map(([id, label]) => (
-              <Field key={id} label={label}>
-                <TextInput
-                  type="password"
-                  autoComplete="off"
-                  value={settings.keys[id] ?? ""}
-                  onChange={(event) => setKey(id, event.target.value)}
-                  placeholder="Để trống nếu chưa dùng"
-                />
-              </Field>
-            ))}
+          <h2 className="text-sm font-medium">Gemini Router · kiểm tra kết nối thật</h2>
+          <p className="text-sm text-muted">Ưu tiên Google Gemini. Khi Gemini gặp lỗi mạng, timeout, giới hạn tần suất hoặc lỗi máy chủ, hệ thống thử OpenRouter nếu đã cấu hình. Khóa không được lưu trong trình duyệt.</p>
+          <p className="text-xs text-faint">Vercel Environment Variables: GEMINI_API_KEY, OPENROUTER_API_KEY. Có thể đặt GEMINI_MODEL và OPENROUTER_MODEL để chọn model.</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button onClick={runAiCheck} disabled={aiChecking}>{aiChecking ? "Đang kiểm tra..." : "Kiểm tra kết nối AI"}</Button>
+            {aiStatus ? <p className="text-sm text-success">{aiStatus}</p> : null}
+            {aiError ? <p className="text-sm text-danger">{aiError}</p> : null}
           </div>
         </Panel>
         <Panel>
