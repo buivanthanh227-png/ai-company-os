@@ -137,7 +137,7 @@ async function callGemini(input: AiChatInput): Promise<AiReply> {
   const apiKey = env("GEMINI_API_KEY");
   if (!apiKey) throw providerFailure("Gemini API key is not configured");
 
-  const model = env("GEMINI_MODEL") ?? "gemini-2.5-flash";
+  const model = env("GEMINI_MODEL") ?? "gemini-2.5-flash-lite";
   const contents = [
     ...input.history.map((item) => ({
       role: item.role === "assistant" ? "model" : "user",
