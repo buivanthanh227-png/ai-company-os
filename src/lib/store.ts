@@ -488,6 +488,21 @@ export const useOs = create<OsState>()(
   ),
 );
 
+/** Return the durable, server-syncable part of the current workspace state. */
+export function getSnapshot(): Snapshot {
+  const state = useOs.getState();
+  return {
+    staffOver: state.staffOver,
+    projects: state.projects,
+    missions: state.missions,
+    tasks: state.tasks,
+    activity: state.activity,
+    messages: state.messages,
+    proposals: state.proposals,
+    settings: { ...state.settings, keys: {} },
+  };
+}
+
 export function useRoster() {
   const over = useOs((state) => state.staffOver);
   return useMemo(() => mergeRoster(over), [over]);
