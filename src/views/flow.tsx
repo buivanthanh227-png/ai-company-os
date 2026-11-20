@@ -57,6 +57,7 @@ export function CeoView() {
       role: item.role === "chairman" ? "user" as const : "assistant" as const,
       content: item.text,
     }));
+    const includeWorkspaceContext = /nhân sự|công ty|dự án|nhiệm vụ|công việc|giao việc|báo cáo|hạn mức|token|điều hành|trạng thái hệ thống/i.test(prompt);
     const context = [
       `Nhân sự: ${roster.length}; đang hoạt động: ${roster.filter((person) => person.status === "active").length}; hết hạn mức: ${roster.filter((person) => person.status === "quota_exhausted").length}.`,
       `Dự án: ${projects.length}; đang hoạt động: ${projects.filter((project) => project.status === "active").length}.`,
@@ -73,7 +74,7 @@ export function CeoView() {
     try {
       const { sendAiMessage } = await import("@/lib/ai.functions");
       const result = await sendAiMessage({
-        data: { message: prompt, history, context },
+        data: { message: prompt, history, context: includeWorkspaceContext ? context : undefined },
       });
       appendChatMessage("chairman", prompt);
       appendChatMessage("ceo", result.text, result.provider);
@@ -89,10 +90,17 @@ export function CeoView() {
         appendChatMessage("ceo", "Phiên đăng nhập chưa hợp lệ. Vui lòng đăng nhập lại rồi thử gửi yêu cầu.", "local");
         setNotice("Chưa xác thực — không gửi yêu cầu sang bộ điều phối nội bộ.");
       } else {
-        // Keep the original local command planner usable when API keys or the
-        // deployed server gateway are not ready. No user message is duplicated.
-        sendLocalChat(prompt);
-        setNotice("AI chưa sẵn sàng; đã chuyển sang bộ điều phối nội bộ hiện có.");
+        // Never disguise a failed provider call as a successful local answer.
+        // The user explicitly chose AI chat, so report the failure honestly.
+        appendChatMessage("chairman", prompt);
+        appendChatMessage(
+          "ceo",
+          message.includes("AI_NOT_CONFIGURED")
+            ? "Chưa cấu hình khóa AI trên máy chủ. Hãy kiểm tra GEMINI_API_KEY hoặc OPENROUTER_API_KEY trong Vercel rồi triển khai lại."
+            : "Hiện chưa kết nối được nhà cung cấp AI. Yêu cầu chưa được xử lý; vui lòng thử lại sau hoặc chuyển sang Lệnh nội bộ nếu bạn muốn thao tác trên dữ liệu điều hành.",
+          "local",
+        );
+        setNotice("Không có câu trả lời AI giả lập: kết nối AI đang lỗi hoặc chưa sẵn sàng.");
       }
     } finally {
       setBusy(false);
@@ -104,7 +112,7 @@ export function CeoView() {
       <PageHeader
         kicker="CEO"
         title="Phòng Chat CEO"
-        lede="Chat CEO ưu tiên Gemini, tự chuyển sang OpenRouter khi cần. Bản tóm tắt nhiệm vụ và dự án sẽ được gửi tới nhà cung cấp AI để trả lời; các lệnh phân công vẫn được thực hiện tại Trung tâm giao việc."
+        lede="Trò chuyện AI đa năng như một trợ lý cá nhân: hỏi đáp kiến thức, học tập, viết lách, phân tích, lập trình và mọi chủ đề khác. Khi cần điều hành công ty, bạn có thể chuyển sang Lệnh nội bộ hoặc giao việc tại Trung tâm giao việc."
       />
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]">
         <Panel className="flex min-h-[32rem] flex-col">
@@ -132,11 +140,11 @@ export function CeoView() {
           </div>
           <form className="mt-3 flex flex-col gap-2" onSubmit={submit}>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs text-muted">Chế độ trả lời:</span>
-              <Button type="button" variant={mode === "ai" ? "primary" : "secondary"} onClick={() => setMode("ai")}>AI Router</Button>
+              <span className="text-xs text-muted">Chế độ:</span>
+              <Button type="button" variant={mode === "ai" ? "primary" : "secondary"} onClick={() => setMode("ai")}>Chat AI đa năng</Button>
               <Button type="button" variant={mode === "local" ? "primary" : "secondary"} onClick={() => setMode("local")}>Lệnh nội bộ</Button>
             </div>
-            <TextArea value={text} onChange={(event) => setText(event.target.value)} placeholder="Giao việc hoặc hỏi CEO..." disabled={busy} />
+            <TextArea value={text} onChange={(event) => setText(event.target.value)} placeholder={mode === "ai" ? "Hỏi bất cứ điều gì..." : "Nhập lệnh điều hành hoặc báo cáo..."} disabled={busy} />
             {notice ? <p className="text-xs text-muted" aria-live="polite">{notice}</p> : null}
             <div className="flex flex-wrap gap-2">
               <Button type="submit" disabled={busy || !text.trim()}>{busy ? "Đang gửi..." : "Gửi"}</Button>
