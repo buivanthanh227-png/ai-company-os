@@ -30,40 +30,120 @@ const STATUS_LABEL: Record<Task["status"], string> = {
 
 export function CeoView() {
   const messages = useOs((state) => state.messages);
-  const sendChat = useOs((state) => state.sendChat);
+  const appendChatMessage = useOs((state) => state.appendChatMessage);
+  const sendLocalChat = useOs((state) => state.sendChat);
+  const tasks = useOs((state) => state.tasks);
+  const projects = useOs((state) => state.projects);
+  const roster = useRoster();
   const [text, setText] = useState("");
+  const [mode, setMode] = useState<"ai" | "local">("ai");
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const prompt = text.trim();
+    if (!prompt || busy) return;
+    setText("");
+    setNotice("");
+
+    if (mode === "local") {
+      sendLocalChat(prompt);
+      return;
+    }
+
+    setBusy(true);
+    const history = messages.slice(-12).map((item) => ({
+      role: item.role === "chairman" ? "user" as const : "assistant" as const,
+      content: item.text,
+    }));
+    const context = [
+      `Nhân sự: ${roster.length}; đang hoạt động: ${roster.filter((person) => person.status === "active").length}; hết hạn mức: ${roster.filter((person) => person.status === "quota_exhausted").length}.`,
+      `Dự án: ${projects.length}; đang hoạt động: ${projects.filter((project) => project.status === "active").length}.`,
+      `Nhiệm vụ: ${tasks.length}; đang mở: ${tasks.filter((task) => !["done", "failed"].includes(task.status)).length}; hoàn thành: ${tasks.filter((task) => task.status === "done").length}; thất bại: ${tasks.filter((task) => task.status === "failed").length}.`,
+      "Các nhiệm vụ gần đây:",
+      ...tasks.slice(0, 10).map((task) => {
+        const person = staffById(roster, task.assigneeId);
+        return `- ${task.title} | ${task.status} | ${person?.name ?? "Chưa phân công"} | ${task.priority}`;
+      }),
+      "Các dự án gần đây:",
+      ...projects.slice(0, 8).map((project) => `- ${project.name} | ${project.status}`),
+    ].join("\n");
+
+    try {
+      const { sendAiMessage } = await import("@/lib/ai.functions");
+      const result = await sendAiMessage({
+        data: { message: prompt, history, context },
+      });
+      appendChatMessage("chairman", prompt);
+      appendChatMessage("ceo", result.text, result.provider);
+      setNotice(
+        result.provider === "gemini"
+          ? "Đã trả lời bằng Google Gemini."
+          : `Đã trả lời bằng OpenRouter${result.fallbackUsed ? " (tuyến dự phòng)" : ""}.`,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message.includes("Unauthorized")) {
+        appendChatMessage("chairman", prompt);
+        appendChatMessage("ceo", "Phiên đăng nhập chưa hợp lệ. Vui lòng đăng nhập lại rồi thử gửi yêu cầu.", "local");
+        setNotice("Chưa xác thực — không gửi yêu cầu sang bộ điều phối nội bộ.");
+      } else {
+        // Keep the original local command planner usable when API keys or the
+        // deployed server gateway are not ready. No user message is duplicated.
+        sendLocalChat(prompt);
+        setNotice("AI chưa sẵn sàng; đã chuyển sang bộ điều phối nội bộ hiện có.");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div>
       <PageHeader
         kicker="CEO"
         title="Phòng ChatGPT"
-        lede="Đây là vai trò tổ chức, đang chạy bằng bộ lập kế hoạch nội bộ. Chưa có cuộc gọi nào tới API ChatGPT."
+        lede="Chat CEO ưu tiên Gemini Router. Khi AI chưa sẵn sàng, có thể dùng bộ điều phối nội bộ; các lệnh phân công vẫn được thực hiện tại Trung tâm giao việc."
       />
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]">
         <Panel className="flex min-h-[32rem] flex-col">
           <div className="flex max-h-[32rem] flex-1 flex-col gap-3 overflow-y-auto pr-1">
             {messages.map((message) => (
               <article key={message.id} className={message.role === "ceo" ? "rounded-md border border-line bg-subtle p-3" : "self-end max-w-[40rem] rounded-md bg-bg p-3"}>
-                <p className="font-mono text-xs text-faint">{message.role === "ceo" ? "CEO · bộ điều phối" : "Chủ tịch"} · {when(message.at)}</p>
+                <p className="font-mono text-xs text-faint">
+                  {message.role === "ceo"
+                    ? message.source === "gemini"
+                      ? "CEO · Gemini"
+                      : message.source === "openrouter"
+                        ? "CEO · OpenRouter"
+                        : "CEO · bộ điều phối nội bộ"
+                    : "Chủ tịch"} · {when(message.at)}
+                </p>
                 <p className="mt-2 text-sm whitespace-pre-wrap text-fg">{message.text}</p>
               </article>
             ))}
+            {busy ? (
+              <article className="rounded-md border border-line bg-subtle p-3" aria-live="polite">
+                <p className="font-mono text-xs text-faint">CEO · Gemini Router</p>
+                <p className="mt-2 text-sm text-muted">Đang xử lý yêu cầu...</p>
+              </article>
+            ) : null}
           </div>
-          <form
-            className="mt-3 flex flex-col gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              sendChat(text);
-              setText("");
-            }}
-          >
-            <TextArea value={text} onChange={(event) => setText(event.target.value)} placeholder="Giao việc hoặc hỏi báo cáo" />
+          <form className="mt-3 flex flex-col gap-2" onSubmit={submit}>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted">Chế độ trả lời:</span>
+              <Button type="button" variant={mode === "ai" ? "primary" : "secondary"} onClick={() => setMode("ai")}>AI Gemini Router</Button>
+              <Button type="button" variant={mode === "local" ? "primary" : "secondary"} onClick={() => setMode("local")}>Lệnh nội bộ</Button>
+            </div>
+            <TextArea value={text} onChange={(event) => setText(event.target.value)} placeholder="Giao việc hoặc hỏi CEO..." disabled={busy} />
+            {notice ? <p className="text-xs text-muted" aria-live="polite">{notice}</p> : null}
             <div className="flex flex-wrap gap-2">
-              <Button type="submit">Gửi</Button>
+              <Button type="submit" disabled={busy || !text.trim()}>{busy ? "Đang gửi..." : "Gửi"}</Button>
               <Button variant="secondary" onClick={() => setText("Sửa ứng dụng học tiếng Trung, người học không mở được bài hội thoại sau HSK 1.")}>
                 Việc mẫu
               </Button>
-              <Button variant="ghost" onClick={() => setText("báo cáo")}>Báo cáo</Button>
+              <Button variant="ghost" onClick={() => { setText("Báo cáo"); setMode("local"); }}>Báo cáo nội bộ</Button>
             </div>
           </form>
         </Panel>
