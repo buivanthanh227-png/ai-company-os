@@ -6,6 +6,7 @@ import { when } from "@/lib/format";
 import { useOs, useRoster } from "@/lib/store";
 import type { Snapshot } from "@/lib/store";
 import { buildXlsx, downloadBlob, toCsv } from "@/lib/xlsx";
+import { checkAiConnection } from "@/lib/ai.functions";
 
 const DOCS = [
   {
@@ -14,7 +15,7 @@ const DOCS = [
   },
   {
     title: "Cái gì đang mô phỏng",
-    body: "Chưa có cuộc gọi nào tới ChatGPT, Claude, Gemini hay nhà cung cấp khác. Khóa API nếu anh dán vào chỉ nằm trong trình duyệt này và không được gửi đi. Ngân sách 0–100 là thước nội bộ để tập chuyển giao, không phải token nhà cung cấp. Hạn mức chính thức ghi «chưa xác minh» khi phiên kiểm tra 20/11/2026 không có số công khai đủ tin cậy.",
+    body: "Bộ lập kế hoạch, chấm điểm nhân sự, phân công và chuyển giao vẫn dùng logic cục bộ. Gateway Gemini Router đã được bổ sung ở backend: Gemini là tuyến chính, OpenRouter là tuyến dự phòng; khóa chỉ đọc từ biến môi trường máy chủ. Chỉ được xem là AI chạy thật sau khi deploy backend, bật xác thực, cấu hình khóa và phép thử kết nối trả về provider/model. Ngân sách 0–100 vẫn là thước nội bộ, không phải token nhà cung cấp.",
   },
   {
     title: "Quy tắc chuyển giao",
@@ -26,23 +27,12 @@ const DOCS = [
   },
   {
     title: "Kiến trúc giai đoạn 2",
-    body: "Backend nên là một cổng duy nhất phía máy chủ. Khóa nằm trong kho bí mật, không vào trình duyệt và không vào git. Hàng đợi việc bền (SQLite trước, PostgreSQL khi cần nhiều máy) lưu ngữ cảnh, lần thử, lý do chuyển và người đã đi qua. Mỗi nhà cung cấp là một đầu nối cùng kiểu: gửi việc, nhận kết quả, báo hết hạn hoặc lỗi. LangGraph, CrewAI hay n8n có thể là công cụ bên dưới, không được là lõi bắt buộc, để khỏi khóa một framework. GitHub Pages chỉ phát được giao diện tĩnh. Điều phối thật cần máy chủ. Bản này đã chạy được giao diện và luật điều phối; phần gọi API là việc của cổng máy chủ.",
+    body: "Backend Vercel dùng Nitro/TanStack Start sẵn có. Gateway Gemini Router được đặt trong module server-only; khóa nằm trong Environment Variables, không vào trình duyệt hay git. Gemini là tuyến chính; OpenRouter free router là tuyến dự phòng khi lỗi mạng, timeout, rate limit hoặc 5xx. Server function yêu cầu authMiddleware. Hàng đợi bền, nhật ký token/chi phí và giới hạn tốc độ dùng chung giữa các instance vẫn là các phần tiếp theo. GitHub Pages chỉ phát bản giao diện tĩnh, không chạy gateway này.",
   },
   {
     title: "Triển khai",
-    body: "Giao diện đang chạy trong bản xem trước. Khi xuất bản, ứng dụng đi theo nền tảng web có máy chủ, không phải một file HTML tĩnh. Kho tài liệu trong ứng dụng là bản hướng dẫn vận hành. Excel danh mục xuất từ Cài đặt, kèm trạng thái hiện tại.",
+    body: "Ứng dụng cần được deploy bằng server build lên Vercel. Sau đó thêm GEMINI_API_KEY và OPENROUTER_API_KEY trong Project Settings → Environment Variables, bật và cấu hình Better Auth, rồi redeploy. Trong Cài đặt, bấm Kiểm tra kết nối AI. GitHub Pages không thể thực thi server functions.",
   },
-];
-
-const KEYS = [
-  ["openai", "OpenAI"],
-  ["anthropic", "Anthropic"],
-  ["google", "Google"],
-  ["xai", "xAI"],
-  ["deepseek", "DeepSeek"],
-  ["groq", "Groq"],
-  ["openrouter", "OpenRouter"],
-  ["elevenlabs", "ElevenLabs"],
 ];
 
 export function DocsView() {
@@ -112,11 +102,35 @@ export function SettingsView() {
   const roster = useRoster();
   const settings = useOs((state) => state.settings);
   const setOrgName = useOs((state) => state.setOrgName);
-  const setKey = useOs((state) => state.setKey);
   const reset = useOs((state) => state.reset);
   const importSnapshot = useOs((state) => state.importSnapshot);
   const [armed, setArmed] = useState(false);
   const [org, setOrg] = useState(settings.orgName);
+  const [aiChecking, setAiChecking] = useState(false);
+  const [aiStatus, setAiStatus] = useState("");
+  const [aiError, setAiError] = useState("");
+
+  async function runAiCheck() {
+    setAiChecking(true);
+    setAiStatus("");
+    setAiError("");
+    try {
+      const result = await checkAiConnection();
+      const provider = result.provider === "gemini" ? "Google Gemini" : "OpenRouter";
+      setAiStatus(`Kết nối thành công: ${provider} · ${result.model}${result.fallbackUsed ? " · đã dùng tuyến dự phòng" : ""}.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      setAiError(
+        message === "AI_NOT_CONFIGURED"
+          ? "Chưa cấu hình GEMINI_API_KEY hoặc OPENROUTER_API_KEY trong Vercel."
+          : message === "Unauthorized"
+            ? "Cần đăng nhập hợp lệ trước khi gọi AI."
+            : "Chưa kết nối được AI. Kiểm tra biến môi trường, xác thực và nhật ký Vercel.",
+      );
+    } finally {
+      setAiChecking(false);
+    }
+  }
 
   function exportExcel() {
     downloadBlob(buildXlsx(catalogRows(roster)), "nhan-su-ai.xlsx");
@@ -141,7 +155,7 @@ export function SettingsView() {
 
   return (
     <div>
-      <PageHeader kicker="Hệ thống" title="Cài đặt và tích hợp" lede="Khóa chỉ lưu trên trình duyệt này. Giai đoạn 1 không gửi khóa đi đâu và không gọi API." />
+      <PageHeader kicker="Hệ thống" title="Cài đặt và tích hợp" lede="API key được giữ ở biến môi trường phía máy chủ Vercel, không nhập trong trình duyệt." />
       <div className="grid gap-3 xl:grid-cols-2">
         <Panel className="flex flex-col gap-3">
           <h2 className="text-sm font-medium">Tổ chức</h2>
@@ -175,20 +189,13 @@ export function SettingsView() {
           </label>
         </Panel>
         <Panel className="flex flex-col gap-3 xl:col-span-2">
-          <h2 className="text-sm font-medium">Kho khóa cho giai đoạn sau</h2>
-          <p className="text-sm text-danger">Không dán khóa thật nếu máy này không phải máy của anh. Ô này không kết nối và không kiểm tra với nhà cung cấp.</p>
-          <div className="grid gap-3 md:grid-cols-2">
-            {KEYS.map(([id, label]) => (
-              <Field key={id} label={label}>
-                <TextInput
-                  type="password"
-                  autoComplete="off"
-                  value={settings.keys[id] ?? ""}
-                  onChange={(event) => setKey(id, event.target.value)}
-                  placeholder="Để trống nếu chưa dùng"
-                />
-              </Field>
-            ))}
+          <h2 className="text-sm font-medium">Gemini Router · kiểm tra kết nối thật</h2>
+          <p className="text-sm text-muted">Ưu tiên Google Gemini. Khi Gemini gặp lỗi mạng, timeout, giới hạn tần suất hoặc lỗi máy chủ, hệ thống thử OpenRouter nếu đã cấu hình. Khóa không được lưu trong trình duyệt.</p>
+          <p className="text-xs text-faint">Vercel Environment Variables: GEMINI_API_KEY, OPENROUTER_API_KEY. Có thể đặt GEMINI_MODEL và OPENROUTER_MODEL để chọn model.</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button onClick={runAiCheck} disabled={aiChecking}>{aiChecking ? "Đang kiểm tra..." : "Kiểm tra kết nối AI"}</Button>
+            {aiStatus ? <p className="text-sm text-success">{aiStatus}</p> : null}
+            {aiError ? <p className="text-sm text-danger">{aiError}</p> : null}
           </div>
         </Panel>
         <Panel>
