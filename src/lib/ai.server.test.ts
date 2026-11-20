@@ -73,3 +73,62 @@ test("does not retry non-retryable authentication failures", async () => {
   await assert.rejects(postJson("https://provider.test", {}, {}, diagnostic), /Provider request failed/);
   assert.equal(calls, 1);
 });
+
+
+test("does not retry HTTP 403 or 404 responses", async () => {
+  for (const status of [403, 404]) {
+    let calls = 0;
+    globalThis.fetch = async () => {
+      calls += 1;
+      return new Response("rejected", { status });
+    };
+
+    await assert.rejects(
+      postJson("https://provider.test", {}, {}, diagnostic),
+      /Provider request failed/,
+    );
+    assert.equal(calls, 1);
+  }
+});
+
+test("does not retry an HTTP 200 error with string status 401", async () => {
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return new Response(JSON.stringify({ error: { status: "401" } }), { status: 200 });
+  };
+
+  await assert.rejects(
+    postJson("https://provider.test", {}, {}, diagnostic),
+    /Provider returned an error payload/,
+  );
+  assert.equal(calls, 1);
+});
+
+test("retries an HTTP 200 error with string status 429", async () => {
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return calls === 1
+      ? new Response(JSON.stringify({ error: { status: "429" } }), { status: 200 })
+      : new Response(JSON.stringify({ ok: true }), { status: 200 });
+  };
+
+  const result = await postJson("https://provider.test", {}, {}, diagnostic);
+  assert.deepEqual(result, { ok: true });
+  assert.equal(calls, 2);
+});
+
+test("retries invalid or empty JSON responses once", async () => {
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return calls === 1
+      ? new Response("", { status: 200 })
+      : new Response(JSON.stringify({ ok: true }), { status: 200 });
+  };
+
+  const result = await postJson("https://provider.test", {}, {}, diagnostic);
+  assert.deepEqual(result, { ok: true });
+  assert.equal(calls, 2);
+});
