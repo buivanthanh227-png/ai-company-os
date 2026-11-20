@@ -170,6 +170,11 @@ async function createPgliteSql(): Promise<Sql> {
 let sqlPromise: Promise<Sql> | null = null;
 
 async function createSql(): Promise<Sql> {
+  if (typeof process !== "undefined" && process.env.VERCEL === "1" && !databaseUrl) {
+    throw new Error(
+      "DATABASE_URL is required on Vercel. Connect Neon/Postgres; PGlite is only for local development.",
+    );
+  }
   if (typeof window !== "undefined") {
     throw new Error(
       "@/lib/db is server-only — call getSql() from a createServerFn handler " +
@@ -221,6 +226,11 @@ export async function getPglite(): Promise<import("@electric-sql/pglite").PGlite
  */
 export function ensureDbReady(): Promise<void> {
   if (dbSource !== "pglite") return Promise.resolve();
+  if (typeof process !== "undefined" && process.env.VERCEL === "1") {
+    return Promise.reject(
+      new Error("DATABASE_URL is required on Vercel. PGlite is only for local development."),
+    );
+  }
   return getSql().then(() => undefined);
 }
 
@@ -229,7 +239,11 @@ export function ensureDbReady(): Promise<void> {
 const globalBoot = globalThis as typeof globalThis & {
   __pgBootstrapPromise__?: Promise<void>;
 };
-if (typeof window === "undefined" && dbSource === "pglite") {
+if (
+  typeof window === "undefined" &&
+  dbSource === "pglite" &&
+  !(typeof process !== "undefined" && process.env.VERCEL === "1")
+) {
   globalBoot.__pgBootstrapPromise__ ??= ensureDbReady().catch((err) => {
     globalBoot.__pgBootstrapPromise__ = undefined;
     console.error("[db] PGLite bootstrap failed:", err);
