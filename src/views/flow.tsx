@@ -53,7 +53,7 @@ export function CeoView() {
     }
 
     setBusy(true);
-    const history = messages.slice(-12).map((item) => ({
+    const history = messages.slice(-8).map((item) => ({
       role: item.role === "chairman" ? "user" as const : "assistant" as const,
       content: item.text,
     }));
