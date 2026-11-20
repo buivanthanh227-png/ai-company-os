@@ -1,10 +1,12 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { MessagesSquare } from "lucide-react";
+import { AiNetwork } from "@/components/ai-network";
 import { Meter, PageHeader, PresenceBadge, StaffMark } from "@/components/bits";
 import { Button, Field, Panel, Select, TextArea, TextInput } from "@/components/ui";
 import { staffById } from "@/data/roster";
-import { rankForSkill } from "@/lib/engine";
+import { detectKind, rankForSkill } from "@/lib/engine";
+import { interpret } from "@/lib/ceo";
 import { when } from "@/lib/format";
 import { useOs, useRoster } from "@/lib/store";
 import {
@@ -34,6 +36,8 @@ export function CeoView() {
   const sendLocalChat = useOs((state) => state.sendChat);
   const tasks = useOs((state) => state.tasks);
   const projects = useOs((state) => state.projects);
+  const missions = useOs((state) => state.missions);
+  const createMission = useOs((state) => state.createMission);
   const roster = useRoster();
   const [text, setText] = useState("");
   const [mode, setMode] = useState<"ai" | "local">("ai");
@@ -111,7 +115,8 @@ export function CeoView() {
 
   return (
     <section className="flex min-h-[calc(100dvh-9rem)] flex-1 flex-col">
-      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col">
+      <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col">
+        <AiNetwork roster={roster} tasks={tasks} />
         {messages.length === 0 ? (
           <div className="my-auto px-2 py-12 text-center">
             <div className="mx-auto mb-5 grid size-14 place-items-center rounded-2xl border border-line bg-elevated text-accent">
@@ -138,6 +143,36 @@ export function CeoView() {
                     </p>
                   ) : null}
                   <p className="whitespace-pre-wrap text-sm leading-7 text-fg">{message.text}</p>
+                  {message.role === "chairman" && interpret(message.text).type === "mission" ? (
+                    <div className="mt-2">
+                      {missions.some((mission) => mission.brief === message.text) ? (
+                        <span className="inline-flex rounded-full bg-teal-50 px-3 py-1 text-xs font-medium text-teal-700">
+                          Đã lập kế hoạch
+                        </span>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="h-9 px-3 text-sm"
+                          onClick={() => {
+                            const existingProject = projects.find((project) => project.name === "Việc từ phòng CEO");
+                            createMission({
+                              projectId: existingProject?.id ?? "new",
+                              projectName: "Việc từ phòng CEO",
+                              title: message.text.slice(0, 90),
+                              brief: message.text,
+                              kind: detectKind(message.text),
+                              priority: "P1",
+                            });
+                            setNotice("Đã lập kế hoạch và phân công theo năng lực nội bộ. Các AI bên ngoài chưa tự động thực thi nhiệm vụ.");
+                          }}
+                        >
+                          <MessagesSquare className="size-4" />
+                          Lập kế hoạch & phân công
+                        </Button>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
               </article>
             ))}
@@ -152,7 +187,7 @@ export function CeoView() {
           </div>
         )}
       </div>
-      <div className="sticky bottom-0 mx-auto w-full max-w-3xl bg-bg pb-2 pt-3">
+      <div className="sticky bottom-0 mx-auto w-full max-w-4xl bg-bg pb-2 pt-3">
         <form className="rounded-2xl border border-line bg-elevated p-3 shadow-sm" onSubmit={submit}>
           <TextArea
             value={text}

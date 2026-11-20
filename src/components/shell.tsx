@@ -236,7 +236,7 @@ export function Shell({ search, children }: { search: AppSearch; children: React
       ) : null}
       <div className="flex min-h-0 min-w-0 flex-1">
         <div className="min-w-0 flex-1">
-          <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-line bg-bg px-3 lg:px-5">
+          <header className="sticky top-0 z-20 flex h-16 items-center gap-2 border-b border-line bg-bg/95 px-3 shadow-sm backdrop-blur lg:px-6">
             <button className="press grid h-11 w-11 place-items-center rounded-md border border-line lg:hidden" onClick={() => setOpen(true)} aria-label="Mở menu">
               {open ? <X className="size-4" /> : <Menu className="size-4" />}
             </button>
@@ -254,7 +254,7 @@ export function Shell({ search, children }: { search: AppSearch; children: React
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Tìm nhân sự, phòng ban, mã"
-                  className="h-11 w-full rounded-md border border-line bg-elevated pr-3 pl-10 text-sm text-fg placeholder:text-faint"
+                  className="h-12 w-full rounded-xl border border-line bg-elevated pr-3 pl-10 text-base text-fg placeholder:text-faint"
                 />
               </label>
               <button type="submit" className="press hidden h-11 rounded-md bg-accent px-4 text-sm font-medium text-accent-fg sm:inline-flex sm:items-center">

@@ -3,18 +3,21 @@
 @theme {
   --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
-  --color-bg: #090c11;
-  --color-elevated: #11161e;
-  --color-subtle: #1a212c;
-  --color-fg: #e7edf4;
-  --color-muted: #93a0b3;
-  --color-faint: #7d8b9e;
-  --color-line: #2a3544;
-  --color-accent: #1fa89a;
-  --color-accent-fg: #04221e;
-  --color-danger: #d4656a;
-  --color-warn: #c4a15a;
-  --color-ok: #3caf84;
+
+  /* Light palette — keep legacy token names so existing views remain compatible. */
+  --color-bg: #f8fafc;
+  --color-elevated: #ffffff;
+  --color-subtle: #f1f5f9;
+  --color-fg: #0f172a;
+  --color-muted: #475569;
+  --color-faint: #64748b;
+  --color-line: #e2e8f0;
+  --color-accent: #2563eb;
+  --color-accent-fg: #ffffff;
+  --color-danger: #dc2626;
+  --color-warn: #b45309;
+  --color-ok: #15803d;
+
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
@@ -22,6 +25,7 @@
 }
 
 :root {
+  color-scheme: light;
   --motion-quick: 150ms;
   --motion-fast: 250ms;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
@@ -31,6 +35,7 @@
   html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
   }
 
   body {
@@ -38,7 +43,8 @@
     background: var(--color-bg);
     color: var(--color-fg);
     font-family: var(--font-sans);
-    line-height: 1.5;
+    font-size: 16px;
+    line-height: 1.6;
   }
 
   h1,
@@ -62,8 +68,14 @@
   }
 
   ::selection {
-    background: color-mix(in oklab, var(--color-accent) 35%, transparent);
+    background: color-mix(in oklab, var(--color-accent) 20%, transparent);
     color: var(--color-fg);
+  }
+
+  input,
+  textarea,
+  select {
+    color-scheme: light;
   }
 }
 
@@ -103,6 +115,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
   .drawer,
   .rise,
   .press {
