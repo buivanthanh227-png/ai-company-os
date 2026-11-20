@@ -94,13 +94,15 @@ export function CeoView() {
         // Never disguise a failed provider call as a successful local answer.
         // The user explicitly chose AI chat, so report the failure honestly.
         appendChatMessage("chairman", prompt);
-        appendChatMessage(
-          "ceo",
-          message.includes("AI_NOT_CONFIGURED")
-            ? "Chưa cấu hình khóa AI trên máy chủ. Hãy kiểm tra GEMINI_API_KEY hoặc OPENROUTER_API_KEY trong Vercel rồi triển khai lại."
-            : "Hiện chưa kết nối được nhà cung cấp AI. Yêu cầu chưa được xử lý; vui lòng thử lại sau hoặc chuyển sang Lệnh nội bộ nếu bạn muốn thao tác trên dữ liệu điều hành.",
-          "local",
-        );
+        let userMessage = "Hiện chưa kết nối được nhà cung cấp AI. Yêu cầu chưa được xử lý; vui lòng thử lại sau hoặc chuyển sang Lệnh nội bộ nếu bạn muốn thao tác trên dữ liệu điều hành.";
+        if (message.includes("AI_NOT_CONFIGURED")) {
+          userMessage = "Chưa cấu hình khóa AI trên máy chủ. Hãy kiểm tra GEMINI_API_KEY hoặc OPENROUTER_API_KEY trong Vercel rồi triển khai lại.";
+        } else if (message.includes("AI_PROVIDER_UNAVAILABLE:GEMINI")) {
+          userMessage = "Gemini không phản hồi được. Chưa có OpenRouter để dự phòng. Vui lòng kiểm tra khóa và model Gemini trên Vercel.";
+        } else if (message.includes("AI_PROVIDER_UNAVAILABLE:BOTH")) {
+          userMessage = "Cả Gemini và OpenRouter đều không phản hồi được lúc này. Vui lòng thử lại sau hoặc kiểm tra trạng thái nhà cung cấp.";
+        }
+        appendChatMessage("ceo", userMessage, "local");
         setNotice("Không có câu trả lời AI giả lập: kết nối AI đang lỗi hoặc chưa sẵn sàng.");
       }
     } finally {
