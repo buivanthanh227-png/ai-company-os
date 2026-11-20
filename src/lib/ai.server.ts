@@ -180,8 +180,8 @@ async function callGemini(input: AiChatInput): Promise<AiReply> {
   // Gemini 2.0/1.5 are retired; 2.5 access is restricted for new projects.
   const candidates = [
     preferred,
-    "gemini-3.8-flash",
     "gemini-3.5-flash-lite",
+    "gemini-3.8-flash",
   ].filter((m, i, arr): m is string => Boolean(m) && arr.indexOf(m) === i);
 
   const failures: string[] = [];
