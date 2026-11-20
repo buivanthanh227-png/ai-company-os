@@ -137,27 +137,50 @@ async function callGemini(input: AiChatInput): Promise<AiReply> {
   const apiKey = env("GEMINI_API_KEY");
   if (!apiKey) throw providerFailure("Gemini API key is not configured");
 
-  const model = env("GEMINI_MODEL") ?? "gemini-2.5-flash-lite";
-  const contents = [
-    ...input.history.map((item) => ({
-      role: item.role === "assistant" ? "model" : "user",
-      parts: [{ text: item.content }],
-    })),
-    { role: "user", parts: [{ text: input.message }] },
-  ];
+  const preferred = env("GEMINI_MODEL");
+  const candidates = [
+    preferred,
+    "gemini-2.5-flash-lite",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-2.5-flash",
+  ].filter((m, i, arr): m is string => Boolean(m) && arr.indexOf(m) === i);
 
-  const payload = await postJson(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-    { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-    {
-      systemInstruction: { parts: [{ text: buildSystemInstruction(input.context) }] },
-      contents,
-      generationConfig: { maxOutputTokens: MAX_OUTPUT_TOKENS, temperature: 0.4 },
-    },
-  );
-  const text = extractGeminiText(payload);
-  if (!text) throw providerFailure("Gemini returned an empty response");
-  return { text, provider: "gemini", model, fallbackUsed: false };
+  const failures: string[] = [];
+
+  for (const model of candidates) {
+    try {
+      const contents = [
+        ...input.history.map((item) => ({
+          role: item.role === "assistant" ? "model" : "user",
+          parts: [{ text: item.content }],
+        })),
+        { role: "user", parts: [{ text: input.message }] },
+      ];
+
+      const payload = await postJson(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+        { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+        {
+          systemInstruction: { parts: [{ text: buildSystemInstruction(input.context) }] },
+          contents,
+          generationConfig: { maxOutputTokens: MAX_OUTPUT_TOKENS, temperature: 0.4 },
+        },
+      );
+      const text = extractGeminiText(payload);
+      if (text) {
+        return { text, provider: "gemini", model, fallbackUsed: false };
+      }
+      failures.push(`${model}: empty response`);
+    } catch (err) {
+      const failure = err as ProviderFailure;
+      const status = failure.status ? ` (HTTP ${failure.status})` : "";
+      failures.push(`${model}: ${failure.message}${status}`);
+    }
+  }
+
+  const summary = failures.slice(0, 3).join("; ");
+  throw providerFailure(`Gemini failed on all models: ${summary}`);
 }
 
 async function callOpenRouter(input: AiChatInput, fallbackUsed: boolean): Promise<AiReply> {
@@ -203,16 +226,16 @@ export async function runAiChat(rawInput: unknown): Promise<AiReply> {
   try {
     return await callGemini(input);
   } catch (geminiError) {
-    // Always attempt OpenRouter fallback when key is present, even on non-retryable Gemini failures
-    // (e.g. invalid key, model not found, quota). This maximizes availability.
+    const geminiMsg = geminiError instanceof Error ? geminiError.message : "unknown";
     if (!hasOpenRouterKey) {
-      throw new Error("AI_PROVIDER_UNAVAILABLE:GEMINI");
+      throw new Error(`AI_PROVIDER_UNAVAILABLE:GEMINI:${geminiMsg}`);
     }
     try {
       const reply = await callOpenRouter(input, true);
+      // Attach a hint about why Gemini failed (visible only in logs or extended reply if needed)
       return { ...reply, fallbackUsed: true };
     } catch {
-      throw new Error("AI_PROVIDER_UNAVAILABLE:BOTH");
+      throw new Error(`AI_PROVIDER_UNAVAILABLE:BOTH:${geminiMsg}`);
     }
   }
 }
