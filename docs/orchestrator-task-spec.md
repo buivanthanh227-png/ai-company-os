@@ -1,10 +1,20 @@
 # Đặc tả kỹ thuật: orchestrateTask
 
-**Trạng thái:** Đề xuất kỹ thuật, chưa triển khai runtime.  
+**Trạng thái:** Đã triển khai một phần lớp phân công và chuyển giao thủ công trong Chat CEO. Worker gọi AI ngoài, hàng đợi bền vững, thực thi đa provider tự động và Critic loop vẫn chưa triển khai.  
 **Phạm vi:** Giai đoạn 2; backend-first, provider-agnostic, ưu tiên model miễn phí.  
 **Nguyên tắc:** Không tự thực thi hành động bên ngoài, không gọi model trả phí, không ghi đè dữ liệu gốc khi chưa được duyệt.
 
 ## 1. Mục tiêu và ranh giới
+
+### Trạng thái runtime hiện tại
+
+- Chat CEO tự tạo mission khi nhận yêu cầu có tính chất công việc và lập các pha theo loại việc.
+- Task có thể được phân công cho nhân sự theo điểm kỹ năng, trạng thái và hồ sơ năng lực; Grok/Cursor đang không khả dụng bị loại khỏi phân công mới.
+- Với AI dùng qua website, người dùng có thể sao chép brief, mở website của AI được giao, xác nhận đã chuyển và gửi kết quả về để CEO soát.
+- Ảnh/tệp gốc chưa tự chuyển sang website AI bên ngoài; Chủ tịch phải đính kèm lại thủ công.
+- Trạng thái handed_off chỉ có nghĩa người dùng xác nhận đã gửi yêu cầu, không chứng minh AI bên ngoài đã bắt đầu hoặc hoàn thành.
+- API Gemini/OpenRouter hiện vẫn là chat trả lời; chưa có công cụ thực thi chỉnh sửa ảnh hay gọi Claude/DeepSeek/Dola qua API trong luồng nhiệm vụ.
+
 
 orchestrateTask nhận yêu cầu đã được người dùng chấp thuận, tách thành task có cấu trúc, chọn vai trò/model, chạy theo dependency, kiểm tra chất lượng và tổng hợp báo cáo.
 
