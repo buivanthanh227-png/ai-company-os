@@ -32,8 +32,8 @@ const NAV = [
   {
     group: "Điều hành",
     items: [
-      { view: "overview", label: "Tổng quan điều hành", icon: LayoutDashboard },
       { view: "ceo", label: "Chat AI đa năng", icon: MessagesSquare },
+      { view: "overview", label: "Tổng quan điều hành", icon: LayoutDashboard },
       { view: "dispatch", label: "Trung tâm giao việc", icon: ListTodo },
       { view: "orchestrator", label: "Bộ điều phối tự động", icon: Waypoints },
     ],
@@ -221,53 +221,6 @@ export function Shell({ search, children }: { search: AppSearch; children: React
     return () => window.clearTimeout(timer);
   }, [notice, setNotice]);
 
-  if (search.view === "ceo") {
-    return (
-      <div className="flex min-h-dvh bg-bg text-fg">
-        <aside className="hidden w-64 shrink-0 flex-col border-r border-line bg-elevated p-3 md:flex">
-          <div className="flex items-center gap-3 px-2 py-3">
-            <BrandMark />
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-fg">AI COMPANY OS</p>
-              <p className="text-xs text-faint">Không gian trợ lý AI</p>
-            </div>
-          </div>
-          <div className="mt-5 rounded-lg border border-line bg-subtle px-3 py-3">
-            <p className="text-xs font-medium text-fg">Cuộc trò chuyện hiện tại</p>
-            <p className="mt-1 text-xs text-muted">Trao đổi với trợ lý AI đa năng</p>
-          </div>
-          <div className="mt-auto border-t border-line pt-3">
-            <Link to="/" search={{ view: "overview", id: "", q: "" }} className="flex h-10 items-center gap-2 rounded-md px-3 text-sm text-muted hover:bg-subtle hover:text-fg">
-              <LayoutDashboard className="size-4" /> Trung tâm điều hành
-            </Link>
-            <p className="px-3 pt-3 text-xs text-faint">Gemini · OpenRouter · Không dùng OpenAI API</p>
-          </div>
-        </aside>
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-line bg-bg/95 px-4 backdrop-blur lg:px-8">
-            <div className="flex items-center gap-2">
-              <BrandMark />
-              <span className="text-sm font-semibold">Trợ lý AI</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <a href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer" className="inline-flex h-10 items-center gap-2 rounded-md border border-line px-3 text-sm text-fg hover:bg-subtle">
-                <ExternalLink className="size-4" /> ChatGPT
-              </a>
-              <Link to="/" search={{ view: "overview", id: "", q: "" }} className="hidden h-10 items-center rounded-md px-3 text-sm text-muted hover:bg-subtle sm:inline-flex">
-                Điều hành
-              </Link>
-            </div>
-          </header>
-          {offline ? <p role="status" className="border-b border-line bg-subtle px-4 py-2 text-sm text-warn">Mất kết nối internet. Bạn vẫn xem được dữ liệu đã lưu trên thiết bị.</p> : null}
-          {notice ? <p role="status" className="border-b border-line bg-subtle px-4 py-2 text-sm text-fg">{notice}</p> : null}
-          <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-3 py-6 sm:px-6 lg:px-10">
-            {children}
-          </main>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-dvh bg-bg text-fg lg:flex">
       <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 border-r border-line bg-elevated lg:flex">
@@ -311,6 +264,9 @@ export function Shell({ search, children }: { search: AppSearch; children: React
             <span className="hidden shrink-0 rounded-md border border-line px-2 py-1 font-mono text-xs text-accent md:inline">
               Chủ tịch · mô phỏng
             </span>
+            <a href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer" className="inline-flex h-9 shrink-0 items-center gap-2 rounded-md border border-line px-3 text-sm text-fg hover:bg-subtle">
+              <ExternalLink className="size-4" /> ChatGPT
+            </a>
           </header>
           {offline ? (
             <p role="status" className="border-b border-line bg-subtle px-4 py-2 text-sm text-warn">
