@@ -55,7 +55,7 @@ export type MissionKind =
   | "qa"
   | "auto"
   | "generic";
-export type TaskStatus = "queued" | "assigned" | "running" | "review" | "done" | "failed";
+export type TaskStatus = "queued" | "assigned" | "handed_off" | "running" | "review" | "done" | "failed";
 export type Priority = "P0" | "P1" | "P2" | "P3";
 export type FailReason = "quota" | "timeout" | "rate_limit" | "api_error" | "auth_error";
 
@@ -115,6 +115,7 @@ export type Task = {
   status: TaskStatus;
   progress: number;
   context: string;
+  result?: string;
   priority: Priority;
   attempts: number;
   history: { at: string; text: string }[];
