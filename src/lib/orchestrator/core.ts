@@ -175,16 +175,48 @@ function isValidTimestamp(value: string, nowMs: number): boolean {
     timestamp <= nowMs;
 }
 
+const RUNTIME_TASK_KEYS = new Set([
+  "id", "revision", "contentHash", "status", "dependsOn", "approvalRequired", "reviewRequired",
+]);
+
 function isRuntimeTaskShape(value: unknown): value is RuntimeTask {
-  if (!isRecord(value)) return false;
-  return typeof value.id === "string" && value.id.length > 0 &&
+  if (!isRecord(value) || !hasOnlyKeys(value, RUNTIME_TASK_KEYS)) return false;
+  return typeof value.id === "string" && /^[a-zA-Z0-9_-]{1,64}$/.test(value.id) &&
     Number.isInteger(value.revision) && (value.revision as number) >= 1 &&
-    typeof value.contentHash === "string" && value.contentHash.length > 0 &&
+    typeof value.contentHash === "string" && Boolean(value.contentHash.trim()) &&
     typeof value.status === "string" && STATUSES.has(value.status as OrchestratorStatus) &&
-    Array.isArray(value.dependsOn) && value.dependsOn.every((id) => typeof id === "string") &&
+    Array.isArray(value.dependsOn) &&
+    value.dependsOn.every((id) => typeof id === "string" && /^[a-zA-Z0-9_-]{1,64}$/.test(id)) &&
     new Set(value.dependsOn).size === value.dependsOn.length &&
     typeof value.approvalRequired === "boolean" &&
     typeof value.reviewRequired === "boolean";
+}
+
+/** Validate the complete runtime DAG, not only the candidate's direct dependencies. */
+function isValidRuntimeGraph(tasks: unknown): tasks is RuntimeTask[] {
+  if (!Array.isArray(tasks) || !tasks.every(isRuntimeTaskShape)) return false;
+  const byId = new Map(tasks.map((task) => [task.id, task]));
+  if (byId.size !== tasks.length) return false;
+
+  for (const task of tasks) {
+    if (task.dependsOn.some((id) => id === task.id || !byId.has(id))) return false;
+  }
+
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const visit = (id: string): boolean => {
+    if (visiting.has(id)) return false;
+    if (visited.has(id)) return true;
+    visiting.add(id);
+    for (const dependencyId of byId.get(id)!.dependsOn) {
+      if (!visit(dependencyId)) return false;
+    }
+    visiting.delete(id);
+    visited.add(id);
+    return true;
+  };
+
+  return [...byId.keys()].every(visit);
 }
 
 /**
@@ -236,8 +268,7 @@ export function isTaskDispatchable(
   nowMs = Date.now(),
 ): boolean {
   if (!isRuntimeTaskShape(task) || task.status !== "queued") return false;
-  if (!Array.isArray(allTasks) || !allTasks.every(isRuntimeTaskShape)) return false;
-  if (new Set(allTasks.map((item) => item.id)).size !== allTasks.length) return false;
+  if (!isValidRuntimeGraph(allTasks)) return false;
   const canonicalTask = allTasks.find((item) => item.id === task.id);
   if (
     !canonicalTask ||
@@ -262,8 +293,7 @@ export function getDispatchableTasks(
   approvals: readonly ApprovalEvidence[] = [],
   nowMs = Date.now(),
 ): RuntimeTask[] {
-  if (!Array.isArray(tasks) || !tasks.every(isRuntimeTaskShape)) return [];
-  if (new Set(tasks.map((task) => task.id)).size !== tasks.length) return [];
+  if (!isValidRuntimeGraph(tasks)) return [];
   return tasks.filter((task) => isTaskDispatchable(task, tasks, approvals, nowMs));
 }
 
