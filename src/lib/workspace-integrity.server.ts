@@ -112,7 +112,7 @@ export function applyAuthoritativeWorkspaceRecords(
   const completionByTask = new Map(completions.map((completion) => [completion.task_id, completion]));
   const tasks = snapshot.tasks.map((task) => {
     const completion = completionByTask.get(task.id);
-    if (completion && taskCompletionHash(task) === completion.task_hash) {
+    if (completion && taskCompletionHash(task) === completion.task_hash && resultContentHash(task.result ?? "") === completion.result_hash) {
       return { ...task, status: "done" as const, progress: 100 };
     }
     return task;
