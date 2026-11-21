@@ -235,12 +235,14 @@ export function isTaskDispatchable(
   approvals: readonly ApprovalEvidence[] = [],
   nowMs = Date.now(),
 ): boolean {
-  if (task.status !== "queued") return false;
-  if (!isRuntimeTaskShape(task)) return false;
+  if (!isRuntimeTaskShape(task) || task.status !== "queued") return false;
   if (!Array.isArray(allTasks) || !allTasks.every(isRuntimeTaskShape)) return false;
   if (new Set(allTasks.map((item) => item.id)).size !== allTasks.length) return false;
   if (!allTasks.some((item) => item.id === task.id)) return false;
-  if (task.approvalRequired && !approvals.some((approval) => matchesApproval(task, approval, nowMs))) return false;
+  if (task.approvalRequired && (
+    !Array.isArray(approvals) ||
+    !approvals.some((approval) => matchesApproval(task, approval, nowMs))
+  )) return false;
   const byId = new Map(allTasks.map((item) => [item.id, item]));
   return task.dependsOn.every((id) => byId.get(id)?.status === "succeeded");
 }
