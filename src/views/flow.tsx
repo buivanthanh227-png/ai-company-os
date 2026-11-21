@@ -365,7 +365,8 @@ function TaskActions({ task }: { task: Task }) {
     setCompleting(true);
     try {
       const { completeTask, loadWorkspaceSnapshot, saveWorkspaceSnapshot } = await import("@/lib/workspace.functions");
-      await saveWorkspaceSnapshot({ data: { snapshot: getSnapshot() } });
+      const saved = await saveWorkspaceSnapshot({ data: { snapshot: getSnapshot() } });
+      useOs.getState().setWorkspaceVersion(saved.version);
       await completeTask({ data: { taskId: task.id } });
       const snapshot = await loadWorkspaceSnapshot();
       if (snapshot) useOs.getState().importSnapshot(snapshot);
