@@ -15,6 +15,7 @@ import {
 } from "@/lib/workspace-integrity.server";
 
 const snapshotSchema = z.object({
+  workspaceVersion: z.number().int().min(0).default(0),
   staffOver: z.record(z.string(), z.unknown()),
   projects: z.array(z.unknown()).max(1000),
   missions: z.array(z.unknown()).max(2000),
@@ -55,13 +56,16 @@ export const loadWorkspaceSnapshot = createServerFn({ method: "GET" })
     if (!process.env.DATABASE_URL?.trim()) return null;
     const { getSql } = await import("@/lib/db");
     const sql = await getSql();
-    const rows = await sql.query<{ snapshot: unknown }>(
-      "select snapshot from app_state where user_id = $1 limit 1",
+    const rows = await sql.query<{ snapshot: unknown; version: number | string }>(
+      "select snapshot, version from app_state where user_id = $1 limit 1",
       [context.userId],
     );
     if (!rows[0]) return null;
 
-    const snapshot = sanitizeClientSnapshot(snapshotSchema.parse(rows[0].snapshot) as Snapshot);
+    const snapshot = sanitizeClientSnapshot({
+      ...(snapshotSchema.parse(rows[0].snapshot) as Snapshot),
+      workspaceVersion: Number(rows[0].version),
+    });
     const decisions = await sql.query<{
       proposal_id: string;
       action: "approved" | "rejected";
@@ -92,7 +96,11 @@ export const saveWorkspaceSnapshot = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     requireWorkspaceDatabase();
-    const safeSnapshot = sanitizeClientSnapshot(data.snapshot as Snapshot);
+    const expectedVersion = data.snapshot.workspaceVersion ?? 0;
+    const safeSnapshot = sanitizeClientSnapshot({
+      ...(data.snapshot as Snapshot),
+      workspaceVersion: expectedVersion + 1,
+    });
     const serialized = JSON.stringify(safeSnapshot);
     if (new TextEncoder().encode(serialized).byteLength > 1_000_000) {
       throw new Error("Workspace snapshot exceeds the 1 MB storage limit");
@@ -100,14 +108,20 @@ export const saveWorkspaceSnapshot = createServerFn({ method: "POST" })
 
     const { getSql } = await import("@/lib/db");
     const sql = await getSql();
-    await sql.query(
-      `insert into app_state (user_id, snapshot, updated_at)
-       values ($1, $2::jsonb, now())
+    const saved = await sql.query<{ version: number | string }>(
+      `insert into app_state (user_id, snapshot, version, updated_at)
+       select $1, $2::jsonb, 1, now()
+       where $3 = 0
        on conflict (user_id) do update
-       set snapshot = excluded.snapshot, updated_at = now()`,
-      [context.userId, serialized],
+       set snapshot = excluded.snapshot,
+           version = app_state.version + 1,
+           updated_at = now()
+       where app_state.version = $3
+       returning version`,
+      [context.userId, serialized, expectedVersion],
     );
-    return { saved: true };
+    if (!saved[0]) throw new Error("WORKSPACE_VERSION_CONFLICT");
+    return { saved: true, version: Number(saved[0].version) };
   });
 
 export const decideProposal = createServerFn({ method: "POST" })
