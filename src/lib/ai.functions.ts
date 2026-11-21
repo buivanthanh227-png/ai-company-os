@@ -6,13 +6,21 @@ export const sendAiMessage = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .inputValidator((input: unknown) => aiChatInputSchema.parse(input))
   .handler(async ({ data }) => {
-    const { runAiChat } = await import("./ai.server");
-    return runAiChat(data);
+    const { runAiChat, toPublicAiError } = await import("./ai.server");
+    try {
+      return await runAiChat(data);
+    } catch (error) {
+      throw toPublicAiError(error);
+    }
   });
 
 export const checkAiConnection = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .handler(async () => {
-    const { testAiConnection } = await import("./ai.server");
-    return testAiConnection();
+    const { testAiConnection, toPublicAiError } = await import("./ai.server");
+    try {
+      return await testAiConnection();
+    } catch (error) {
+      throw toPublicAiError(error);
+    }
   });
