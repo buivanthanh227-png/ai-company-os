@@ -108,18 +108,21 @@ export const saveWorkspaceSnapshot = createServerFn({ method: "POST" })
 
     const { getSql } = await import("@/lib/db");
     const sql = await getSql();
-    const saved = await sql.query<{ version: number | string }>(
-      `insert into app_state (user_id, snapshot, version, updated_at)
-       select $1, $2::jsonb, 1, now()
-       where $3 = 0
-       on conflict (user_id) do update
-       set snapshot = excluded.snapshot,
-           version = app_state.version + 1,
-           updated_at = now()
-       where app_state.version = $3
-       returning version`,
-      [context.userId, serialized, expectedVersion],
-    );
+    const saved = expectedVersion === 0
+      ? await sql.query<{ version: number | string }>(
+          `insert into app_state (user_id, snapshot, version, updated_at)
+           values ($1, $2::jsonb, 1, now())
+           on conflict (user_id) do nothing
+           returning version`,
+          [context.userId, serialized],
+        )
+      : await sql.query<{ version: number | string }>(
+          `update app_state
+           set snapshot = $2::jsonb, version = version + 1, updated_at = now()
+           where user_id = $1 and version = $3
+           returning version`,
+          [context.userId, serialized, expectedVersion],
+        );
     if (!saved[0]) throw new Error("WORKSPACE_VERSION_CONFLICT");
     return { saved: true, version: Number(saved[0].version) };
   });
