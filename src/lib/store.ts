@@ -286,14 +286,17 @@ export const useOs = create<OsState>()(
         });
       },
       setTaskStatus: (taskId, status) => {
+        if (status === "done") {
+          set({ notice: "Không thể hoàn tất bằng thao tác cục bộ. Cần xác nhận owner trên máy chủ sau khi lưu kết quả." });
+          return;
+        }
         const at = nowIso();
         const state = get();
         const current = state.tasks.find((task) => task.id === taskId);
         if (!current) return;
         let staffOver = state.staffOver;
-        if (status === "done") staffOver = bump(staffOver, current.assigneeId, "ok");
         if (status === "failed") staffOver = bump(staffOver, current.assigneeId, "bad");
-        const progress = status === "done" ? 100 : status === "review" ? Math.max(current.progress, 90) : status === "handed_off" ? Math.max(current.progress, 20) : status === "running" ? Math.max(current.progress, 10) : current.progress;
+        const progress = status === "review" ? Math.max(current.progress, 90) : status === "handed_off" ? Math.max(current.progress, 20) : status === "running" ? Math.max(current.progress, 10) : current.progress;
         const text =
           status === "done"
             ? "Đánh dấu hoàn thành. Ngữ cảnh được giữ trong hồ sơ việc."
