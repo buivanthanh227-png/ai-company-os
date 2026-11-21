@@ -152,8 +152,16 @@ export function Shell({ search, children }: { search: AppSearch; children: React
         if (remote) {
           useOs.getState().importSnapshot(remote);
         } else {
-          const saved = await saveWorkspaceSnapshot({ data: { snapshot: getSnapshot() } });
-          useOs.getState().setWorkspaceVersion(saved.version);
+          try {
+            const saved = await saveWorkspaceSnapshot({ data: { snapshot: getSnapshot() } });
+            useOs.getState().setWorkspaceVersion(saved.version);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "";
+            if (!message.includes("WORKSPACE_VERSION_CONFLICT")) throw error;
+            const latest = await loadWorkspaceSnapshot();
+            if (!latest) throw error;
+            useOs.getState().importSnapshot(latest);
+          }
         }
 
         let previous = snapshotContent();
