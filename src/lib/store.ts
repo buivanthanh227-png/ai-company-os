@@ -57,7 +57,6 @@ type OsState = Snapshot & {
   setBudget: (id: string, budget: number) => void;
   setSkill: (id: string, skill: SkillKey, value: number) => void;
   propose: (input: { staffId: string; toRank: Rank; title: string; reason: string }) => void;
-  decideProposal: (id: string, accept: boolean) => void;
   addProject: (name: string, summary: string) => void;
   setProjectStatus: (id: string, status: Project["status"]) => void;
   setOrgName: (orgName: string) => void;
@@ -298,15 +297,13 @@ export const useOs = create<OsState>()(
         if (status === "failed") staffOver = bump(staffOver, current.assigneeId, "bad");
         const progress = status === "review" ? Math.max(current.progress, 90) : status === "handed_off" ? Math.max(current.progress, 20) : status === "running" ? Math.max(current.progress, 10) : current.progress;
         const text =
-          status === "done"
-            ? "Đánh dấu hoàn thành. Ngữ cảnh được giữ trong hồ sơ việc."
-            : status === "failed"
-              ? "Đánh dấu thất bại và trừ tỷ lệ thành công của người nhận."
-              : status === "handed_off"
-                ? "Chủ tịch xác nhận đã chuyển yêu cầu cho AI bên ngoài. Đang chờ kết quả; hệ thống chưa tự gọi AI đó."
-                : status === "review"
-                  ? "Đã nhận kết quả và chuyển sang bước soát."
-                  : "Bắt đầu thực hiện.";
+          status === "failed"
+            ? "Đánh dấu thất bại và trừ tỷ lệ thành công của người nhận."
+            : status === "handed_off"
+              ? "Chủ tịch xác nhận đã chuyển yêu cầu cho AI bên ngoài. Đang chờ kết quả; hệ thống chưa tự gọi AI đó."
+              : status === "review"
+                ? "Đã nhận kết quả và chuyển sang bước soát."
+                : "Bắt đầu thực hiện.";
         const updated: Task = {
           ...current,
           status,
@@ -317,7 +314,7 @@ export const useOs = create<OsState>()(
         set({
           staffOver,
           tasks: state.tasks.map((task) => (task.id === taskId ? updated : task)),
-          activity: pushActivity(state.activity, `${current.title}: ${text}`, status === "done" ? "ok" : status === "failed" ? "warn" : "info", at),
+          activity: pushActivity(state.activity, `${current.title}: ${text}`, status === "failed" ? "warn" : "info", at),
           notice: text,
         });
       },
@@ -429,36 +426,6 @@ export const useOs = create<OsState>()(
           proposals: [proposal, ...state.proposals],
           activity: pushActivity(state.activity, `CEO đề xuất điều chuyển ${person.name} thành ${proposal.title}. Chờ Chủ tịch duyệt.`, "info", at),
           notice: "Đề xuất đang chờ Chủ tịch phê duyệt.",
-        });
-      },
-      decideProposal: (id, accept) => {
-        const at = nowIso();
-        const state = get();
-        const proposal = state.proposals.find((item) => item.id === id);
-        if (!proposal || proposal.status !== "pending") return;
-        let staffOver = state.staffOver;
-        if (accept) {
-          staffOver = {
-            ...staffOver,
-            [proposal.staffId]: {
-              ...staffOver[proposal.staffId],
-              rank: proposal.toRank,
-              title: proposal.title,
-            },
-          };
-        }
-        set({
-          staffOver,
-          proposals: state.proposals.map((item) =>
-            item.id === id ? { ...item, status: accept ? "approved" : "rejected" } : item,
-          ),
-          activity: pushActivity(
-            state.activity,
-            accept ? `Chủ tịch duyệt điều chuyển ${proposal.title}.` : "Chủ tịch bác đề xuất điều chuyển.",
-            accept ? "ok" : "warn",
-            at,
-          ),
-          notice: accept ? "Đã duyệt điều chuyển." : "Đã bác đề xuất.",
         });
       },
       addProject: (name, summary) => {
