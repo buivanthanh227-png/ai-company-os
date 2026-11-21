@@ -23,6 +23,7 @@ import type {
 import { KIND_LABEL, RANK_LABEL } from "@/lib/types";
 
 export type Snapshot = {
+  workspaceVersion?: number;
   staffOver: Record<string, StaffOver>;
   projects: Project[];
   missions: Mission[];
@@ -34,9 +35,11 @@ export type Snapshot = {
 };
 
 type OsState = Snapshot & {
+  workspaceVersion: number;
   notice: string | null;
   hydrated: boolean;
   setNotice: (notice: string | null) => void;
+  setWorkspaceVersion: (version: number) => void;
   markHydrated: () => void;
   createMission: (input: {
     projectId: string;
@@ -104,11 +107,13 @@ export const useOs = create<OsState>()(
   persist(
     (set, get) => ({
       ...seed,
+      workspaceVersion: 0,
       proposals: [] as Proposal[],
       settings: EMPTY_SETTINGS,
       notice: null,
       hydrated: false,
       setNotice: (notice) => set({ notice }),
+      setWorkspaceVersion: (workspaceVersion) => set({ workspaceVersion }),
       markHydrated: () => set({ hydrated: true }),
       createMission: (input) => {
         const at = nowIso();
@@ -452,6 +457,7 @@ export const useOs = create<OsState>()(
       importSnapshot: (snapshot) => {
         set({
           ...snapshot,
+          workspaceVersion: snapshot.workspaceVersion ?? 0,
           settings: { ...snapshot.settings, keys: {} },
           notice: "Đã nhập bản dữ liệu. API key không được nhập hoặc lưu trong trình duyệt.",
         });
@@ -459,6 +465,7 @@ export const useOs = create<OsState>()(
       reset: () => {
         set({
           ...buildSeed(),
+          workspaceVersion: 0,
           settings: EMPTY_SETTINGS,
           proposals: [],
           notice: "Đã khôi phục dữ liệu mẫu.",
@@ -470,6 +477,7 @@ export const useOs = create<OsState>()(
       storage: createJSONStorage(() => (typeof window === "undefined" ? memoryStorage() : localStorage)),
       skipHydration: true,
       partialize: (state) => ({
+        workspaceVersion: state.workspaceVersion,
         staffOver: state.staffOver,
         projects: state.projects,
         missions: state.missions,
@@ -487,6 +495,7 @@ export const useOs = create<OsState>()(
 export function getSnapshot(): Snapshot {
   const state = useOs.getState();
   return {
+    workspaceVersion: state.workspaceVersion,
     staffOver: state.staffOver,
     projects: state.projects,
     missions: state.missions,

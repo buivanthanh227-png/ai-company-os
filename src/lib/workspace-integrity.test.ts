@@ -42,6 +42,7 @@ const task: Task = {
 };
 
 const snapshot = (): Snapshot => ({
+  workspaceVersion: 7,
   staffOver: { "staff-1": { rank: "director", title: "Forged title", budget: 50 } },
   projects: [],
   missions: [],
@@ -54,6 +55,7 @@ const snapshot = (): Snapshot => ({
 
 test("client snapshot cannot grant rank, approve proposals, or mark tasks done", () => {
   const clean = sanitizeClientSnapshot(snapshot());
+  assert.equal(clean.workspaceVersion, 7);
   assert.equal(clean.staffOver["staff-1"]?.rank, undefined);
   assert.equal(clean.staffOver["staff-1"]?.title, undefined);
   assert.equal(clean.proposals[0]?.status, "pending");
