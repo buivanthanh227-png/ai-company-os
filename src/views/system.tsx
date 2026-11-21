@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/bits";
 import { Button, Field, Panel, TextInput } from "@/components/ui";
 import { catalogRows } from "@/lib/catalog";
@@ -6,7 +6,7 @@ import { when } from "@/lib/format";
 import { useOs, useRoster } from "@/lib/store";
 import type { Snapshot } from "@/lib/store";
 import { buildXlsx, downloadBlob, toCsv } from "@/lib/xlsx";
-import { checkAiConnection } from "@/lib/ai.functions";
+import { checkAiConnection, getAiProviderReadiness } from "@/lib/ai.functions";
 
 const DOCS = [
   {
@@ -15,7 +15,7 @@ const DOCS = [
   },
   {
     title: "Cái gì đang mô phỏng",
-    body: "Bộ lập kế hoạch, chấm điểm nhân sự, phân công và chuyển giao vẫn dùng logic cục bộ. Gateway Gemini Router đã được bổ sung ở backend: Gemini là tuyến chính, OpenRouter là tuyến dự phòng; khóa chỉ đọc từ biến môi trường máy chủ. Chỉ được xem là AI chạy thật sau khi deploy backend, bật xác thực, cấu hình khóa và phép thử kết nối trả về provider/model. Ngân sách 0–100 vẫn là thước nội bộ, không phải token nhà cung cấp.",
+    body: "Bộ lập kế hoạch, chấm điểm nhân sự, phân công và chuyển giao vẫn dùng logic cục bộ. Gateway backend có adapter Gemini, DeepSeek, Groq và OpenRouter. Gemini là tuyến chính; DeepSeek/Groq chỉ được bật làm tuyến dự phòng khi có key, model và cờ opt-in; OpenRouter là tuyến dự phòng cuối. Chỉ được xem là provider hoạt động sau khi có request kiểm tra thật trả về provider/model. Ngân sách 0–100 vẫn là thước nội bộ, không phải token nhà cung cấp.",
   },
   {
     title: "Quy tắc chuyển giao",
@@ -27,7 +27,7 @@ const DOCS = [
   },
   {
     title: "Kiến trúc giai đoạn 2",
-    body: "Backend Vercel dùng Nitro/TanStack Start sẵn có. Gateway Gemini Router được đặt trong module server-only; khóa nằm trong Environment Variables, không vào trình duyệt hay git. Gemini là tuyến chính; OpenRouter free router là tuyến dự phòng khi lỗi mạng, timeout, rate limit hoặc 5xx. Server function yêu cầu authMiddleware. Hàng đợi bền, nhật ký token/chi phí và giới hạn tốc độ dùng chung giữa các instance vẫn là các phần tiếp theo. GitHub Pages chỉ phát bản giao diện tĩnh, không chạy gateway này.",
+    body: "Backend Vercel dùng Nitro/TanStack Start sẵn có. Gateway nằm trong module server-only; khóa chỉ đọc từ Environment Variables. Gemini là tuyến chính; DeepSeek/Groq có adapter tương thích Chat Completions nhưng mặc định tắt, chỉ được gọi khi quản trị viên bật cờ opt-in và cấu hình model. OpenRouter là tuyến dự phòng cuối. Server function yêu cầu authMiddleware. Hàng đợi bền, nhật ký token/chi phí và giới hạn tốc độ dùng chung giữa các instance vẫn là các phần tiếp theo. GitHub Pages chỉ phát bản giao diện tĩnh, không chạy gateway này.",
   },
   {
     title: "Triển khai",
@@ -109,6 +109,27 @@ export function SettingsView() {
   const [aiChecking, setAiChecking] = useState(false);
   const [aiStatus, setAiStatus] = useState("");
   const [aiError, setAiError] = useState("");
+  const [providerReadiness, setProviderReadiness] = useState<Array<{
+    provider: "gemini" | "deepseek" | "groq" | "openrouter";
+    configured: boolean;
+    adapterImplemented: boolean;
+    enabled: boolean;
+    modelConfigured: boolean;
+    connectivity: "not_checked" | "success";
+  }>>([]);
+  const [readinessError, setReadinessError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    void getAiProviderReadiness()
+      .then((status) => {
+        if (active) setProviderReadiness(status);
+      })
+      .catch(() => {
+        if (active) setReadinessError("Không tải được trạng thái cấu hình từ máy chủ.");
+      });
+    return () => { active = false; };
+  }, []);
 
   async function runAiCheck() {
     setAiChecking(true);
@@ -116,7 +137,10 @@ export function SettingsView() {
     setAiError("");
     try {
       const result = await checkAiConnection();
-      const provider = result.provider === "gemini" ? "Google Gemini" : "OpenRouter";
+      const provider = result.provider === "gemini" ? "Google Gemini" : result.provider === "deepseek" ? "DeepSeek" : result.provider === "groq" ? "Groq" : "OpenRouter";
+      setProviderReadiness((current) => current.map((item) =>
+        item.provider === result.provider ? { ...item, connectivity: "success" } : item,
+      ));
       setAiStatus(`Kết nối thành công: ${provider} · ${result.model}${result.fallbackUsed ? " · đã dùng tuyến dự phòng" : ""}.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
@@ -125,7 +149,17 @@ export function SettingsView() {
           ? "Chưa cấu hình GEMINI_API_KEY hoặc OPENROUTER_API_KEY trong Vercel."
           : message === "Unauthorized"
             ? "Cần đăng nhập hợp lệ trước khi gọi AI."
-            : "Chưa kết nối được AI. Kiểm tra biến môi trường, xác thực và nhật ký Vercel.",
+            : message === "AI_DIAGNOSTICS_FORBIDDEN"
+              ? "Kiểm tra API thật đang bị khóa. Chỉ tài khoản được chủ sở hữu cho phép và bật cờ máy chủ mới được gửi request."
+              : message === "AI_DIAGNOSTICS_RATE_LIMITED"
+                ? "Vừa kiểm tra kết nối gần đây. Vui lòng chờ ít nhất 60 giây."
+                : message === "AI_PROVIDER_RATE_LIMITED"
+                  ? "Provider đang giới hạn tần suất; hãy thử lại sau."
+              : message === "AI_PROVIDER_AUTH_FAILED"
+                ? "Provider từ chối xác thực; quản trị viên cần kiểm tra cấu hình."
+                : message === "AI_PROVIDER_TIMEOUT"
+                  ? "Request kiểm tra đã hết thời gian chờ."
+                  : "Chưa kết nối được AI. Kiểm tra cấu hình máy chủ và nhật ký Vercel.",
       );
     } finally {
       setAiChecking(false);
@@ -189,13 +223,26 @@ export function SettingsView() {
           </label>
         </Panel>
         <Panel className="flex flex-col gap-3 xl:col-span-2">
-          <h2 className="text-sm font-medium">Gemini Router · kiểm tra kết nối thật</h2>
-          <p className="text-sm text-muted">Ưu tiên Google Gemini. Khi Gemini gặp lỗi mạng, timeout, giới hạn tần suất hoặc lỗi máy chủ, hệ thống thử OpenRouter nếu đã cấu hình. Khóa không được lưu trong trình duyệt.</p>
-          <p className="text-xs text-faint">Vercel Environment Variables: GEMINI_API_KEY, OPENROUTER_API_KEY. Có thể đặt GEMINI_MODEL và OPENROUTER_MODEL để chọn model.</p>
+          <h2 className="text-sm font-medium">Trạng thái Provider API</h2>
+          <p className="text-sm text-muted">Thông tin cấu hình chỉ phản ánh biến môi trường có tồn tại; không chứng minh API key hợp lệ hoặc provider đang hoạt động. Kiểm tra kết nối là một request API thật và có thể tiêu hao quota hoặc phát sinh chi phí.</p>
+          {readinessError ? <p role="alert" className="text-sm text-danger">{readinessError}</p> : null}
+          <div className="grid gap-2 sm:grid-cols-2">
+            {providerReadiness.map((item) => (
+              <div key={item.provider} className="rounded-lg border border-line p-3">
+                <p className="text-sm font-medium capitalize">{item.provider === "gemini" ? "Google Gemini" : item.provider === "deepseek" ? "DeepSeek" : item.provider === "groq" ? "Groq" : "OpenRouter"}</p>
+                <p className="mt-1 text-xs text-muted">API key: {item.configured ? "Đã cấu hình" : "Chưa cấu hình"}</p>
+                <p className="text-xs text-muted">Adapter: {item.adapterImplemented ? "Đã triển khai" : "Chưa triển khai"}</p>
+                <p className="text-xs text-muted">Model: {item.modelConfigured ? "Đã chọn" : "Chưa cấu hình"}</p>
+                <p className="text-xs text-muted">Fallback: {item.enabled ? "Được bật" : "Đang tắt"}</p>
+                <p className="text-xs text-muted">Kết nối: {item.connectivity === "success" ? "Đã kiểm tra thành công trong phiên này" : "Chưa kiểm tra"}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-faint">Không có API key hoặc secret nào được gửi về trình duyệt. DeepSeek/Groq chỉ được tự động dùng làm tuyến dự phòng khi đã có key, model và bật cờ AI_ENABLE_DEEPSEEK_FALLBACK / AI_ENABLE_GROQ_FALLBACK. Hai cờ này mặc định tắt. Request kiểm tra thật chỉ dành cho user ID nằm trong AI_DIAGNOSTICS_ALLOWED_USER_IDS khi AI_ALLOW_LIVE_DIAGNOSTICS=true; mỗi user bị giới hạn một lần trong 60 giây.</p>
           <div className="flex flex-wrap items-center gap-3">
-            <Button onClick={runAiCheck} disabled={aiChecking}>{aiChecking ? "Đang kiểm tra..." : "Kiểm tra kết nối AI"}</Button>
+            <Button onClick={runAiCheck} disabled={aiChecking}>{aiChecking ? "Đang kiểm tra..." : "Gửi request kiểm tra kết nối thật"}</Button>
             {aiStatus ? <p className="text-sm font-medium text-ok">{aiStatus}</p> : null}
-            {aiError ? <p className="text-sm text-danger">{aiError}</p> : null}
+            {aiError ? <p role="alert" className="text-sm text-danger">{aiError}</p> : null}
           </div>
         </Panel>
         <Panel>
