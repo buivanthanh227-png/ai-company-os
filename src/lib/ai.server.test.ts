@@ -301,14 +301,14 @@ test("reports provider configuration without exposing keys or claiming connectiv
   try {
     const status = getAiProviderReadiness();
     assert.deepEqual(
-      status.map(({ provider, configured, adapterImplemented, connectivity }) => ({
-        provider, configured, adapterImplemented, connectivity,
+      status.map(({ provider, configured, adapterImplemented, enabled, modelConfigured, connectivity }) => ({
+        provider, configured, adapterImplemented, enabled, modelConfigured, connectivity,
       })),
       [
-        { provider: "gemini", configured: true, adapterImplemented: true, connectivity: "not_checked" },
-        { provider: "deepseek", configured: true, adapterImplemented: false, connectivity: "not_checked" },
-        { provider: "groq", configured: false, adapterImplemented: false, connectivity: "not_checked" },
-        { provider: "openrouter", configured: true, adapterImplemented: true, connectivity: "not_checked" },
+        { provider: "gemini", configured: true, adapterImplemented: true, enabled: true, modelConfigured: true, connectivity: "not_checked" },
+        { provider: "deepseek", configured: true, adapterImplemented: true, enabled: false, modelConfigured: false, connectivity: "not_checked" },
+        { provider: "groq", configured: false, adapterImplemented: true, enabled: false, modelConfigured: false, connectivity: "not_checked" },
+        { provider: "openrouter", configured: true, adapterImplemented: true, enabled: true, modelConfigured: true, connectivity: "not_checked" },
       ],
     );
     assert.equal(JSON.stringify(status).includes("test-gemini-key"), false);
@@ -321,5 +321,90 @@ test("reports provider configuration without exposing keys or claiming connectiv
     else process.env.GROQ_API_KEY = previous.groq;
     if (previous.openrouter === undefined) delete process.env.OPENROUTER_API_KEY;
     else process.env.OPENROUTER_API_KEY = previous.openrouter;
+  }
+});
+
+
+test("uses the DeepSeek adapter only when explicitly enabled and configured", async () => {
+  const names = ["GEMINI_API_KEY", "OPENROUTER_API_KEY", "DEEPSEEK_API_KEY", "DEEPSEEK_MODEL", "AI_ENABLE_DEEPSEEK_FALLBACK", "GROQ_API_KEY", "GROQ_MODEL", "AI_ENABLE_GROQ_FALLBACK"];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  process.env.GEMINI_API_KEY = "test-gemini-key";
+  delete process.env.OPENROUTER_API_KEY;
+  process.env.DEEPSEEK_API_KEY = "test-deepseek-key";
+  process.env.DEEPSEEK_MODEL = "deepseek-test-model";
+  process.env.AI_ENABLE_DEEPSEEK_FALLBACK = "true";
+  delete process.env.GROQ_API_KEY;
+  delete process.env.GROQ_MODEL;
+  delete process.env.AI_ENABLE_GROQ_FALLBACK;
+  const seen: Array<{ url: string; authorization: string | null; body: Record<string, unknown> }> = [];
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    const headers = new Headers(init?.headers);
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    seen.push({ url, authorization: headers.get("Authorization"), body });
+    if (url.includes("generativelanguage.googleapis.com")) {
+      return new Response("unavailable", { status: 503 });
+    }
+    if (url === "https://api.deepseek.com/chat/completions") {
+      return new Response(JSON.stringify({ choices: [{ message: { content: "DeepSeek OK" } }] }), { status: 200 });
+    }
+    throw new Error("Unexpected provider URL");
+  };
+
+  try {
+    const reply = await runAiChat({ message: "Test fallback", history: [] });
+    assert.equal(reply.provider, "deepseek");
+    assert.equal(reply.model, "deepseek-test-model");
+    assert.equal(reply.text, "DeepSeek OK");
+    assert.equal(reply.fallbackUsed, true);
+    const deepseek = seen.find((item) => item.url.includes("api.deepseek.com"));
+    assert.equal(deepseek?.authorization, "Bearer test-deepseek-key");
+    assert.equal(deepseek?.body.model, "deepseek-test-model");
+  } finally {
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});
+
+test("uses the Groq adapter with OpenAI-compatible request shape when enabled", async () => {
+  const names = ["GEMINI_API_KEY", "OPENROUTER_API_KEY", "DEEPSEEK_API_KEY", "DEEPSEEK_MODEL", "AI_ENABLE_DEEPSEEK_FALLBACK", "GROQ_API_KEY", "GROQ_MODEL", "AI_ENABLE_GROQ_FALLBACK"];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  process.env.GEMINI_API_KEY = "test-gemini-key";
+  delete process.env.OPENROUTER_API_KEY;
+  delete process.env.DEEPSEEK_API_KEY;
+  delete process.env.DEEPSEEK_MODEL;
+  delete process.env.AI_ENABLE_DEEPSEEK_FALLBACK;
+  process.env.GROQ_API_KEY = "test-groq-key";
+  process.env.GROQ_MODEL = "groq-test-model";
+  process.env.AI_ENABLE_GROQ_FALLBACK = "true";
+  let groqRequest: { authorization: string | null; body: Record<string, unknown> } | undefined;
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url.includes("generativelanguage.googleapis.com")) return new Response("unavailable", { status: 503 });
+    if (url === "https://api.groq.com/openai/v1/chat/completions") {
+      groqRequest = {
+        authorization: new Headers(init?.headers).get("Authorization"),
+        body: JSON.parse(String(init?.body)) as Record<string, unknown>,
+      };
+      return new Response(JSON.stringify({ choices: [{ message: { content: "Groq OK" } }] }), { status: 200 });
+    }
+    throw new Error("Unexpected provider URL");
+  };
+
+  try {
+    const reply = await runAiChat({ message: "Test Groq", history: [] });
+    assert.equal(reply.provider, "groq");
+    assert.equal(reply.model, "groq-test-model");
+    assert.equal(reply.text, "Groq OK");
+    assert.equal(reply.fallbackUsed, true);
+    assert.equal(groqRequest?.authorization, "Bearer test-groq-key");
+    assert.equal(groqRequest?.body.model, "groq-test-model");
+  } finally {
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
   }
 });
