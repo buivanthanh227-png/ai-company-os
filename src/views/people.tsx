@@ -329,7 +329,8 @@ export function ReviewsView() {
               ? "Tài khoản hiện tại không có quyền owner."
               : message.includes("PROPOSAL_ALREADY_DECIDED")
                 ? "Đề xuất này đã có quyết định trước đó và không thể phát lại."
-                : "Không thể ghi nhận quyết định. Đề xuất vẫn giữ nguyên trạng thái.";
+                : "Không thể ghi nhận quyết định. Đề xuất vẫn giữ nguyên trạng thái."
+      );
     } finally {
       setDecisionBusy(false);
     }
