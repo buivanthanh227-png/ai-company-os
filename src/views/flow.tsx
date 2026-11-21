@@ -7,7 +7,7 @@ import { staffById } from "@/data/roster";
 import { detectKind, rankForSkill } from "@/lib/engine";
 import { interpret } from "@/lib/ceo";
 import { when } from "@/lib/format";
-import { useOs, useRoster } from "@/lib/store";
+import { getSnapshot, useOs, useRoster } from "@/lib/store";
 import {
   ACCESS_LABEL,
   KIND_LABEL,
@@ -26,7 +26,7 @@ const STATUS_LABEL: Record<Task["status"], string> = {
   handed_off: "Đã chuyển AI · chờ kết quả",
   running: "Đang làm",
   review: "Đang soát",
-  done: "Xong",
+  done: "Đã xác nhận thủ công",
   failed: "Thất bại",
 };
 
@@ -351,6 +351,8 @@ function TaskHandoff({ task, missionBrief, person }: { task: Task; missionBrief:
 function TaskActions({ task }: { task: Task }) {
   const affect = useOs((state) => state.affectTask);
   const setStatus = useOs((state) => state.setTaskStatus);
+  const setNotice = useOs((state) => state.setNotice);
+  const [completing, setCompleting] = useState(false);
   const reasons: [FailReason, string][] = [
     ["quota", "Hết hạn mức"],
     ["timeout", "Quá thời gian"],
@@ -358,11 +360,43 @@ function TaskActions({ task }: { task: Task }) {
     ["api_error", "Lỗi API"],
     ["auth_error", "Lỗi xác thực"],
   ];
+
+  async function attestCompletion() {
+    setCompleting(true);
+    try {
+      const { completeTask, loadWorkspaceSnapshot, saveWorkspaceSnapshot } = await import("@/lib/workspace.functions");
+      await saveWorkspaceSnapshot({ data: { snapshot: getSnapshot() } });
+      await completeTask({ data: { taskId: task.id } });
+      const snapshot = await loadWorkspaceSnapshot();
+      if (snapshot) useOs.getState().importSnapshot(snapshot);
+      setNotice("Đã ghi nhận xác nhận hoàn tất thủ công của owner. Trạng thái này chưa thay thế kiểm chứng CI/commit.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      setNotice(
+        message.includes("OWNER_IDENTITY_NOT_UNIQUE")
+          ? "Không thể phê duyệt bằng danh tính dev-user dùng chung. Cần phiên đăng nhập có user ID riêng."
+          : message.includes("OWNER_AUTHORIZATION_NOT_CONFIGURED")
+            ? "Chưa cấu hình AI_COMPANY_OWNER_USER_IDS trên máy chủ; thao tác bị khóa an toàn."
+            : message.includes("OWNER_FORBIDDEN")
+              ? "Tài khoản hiện tại không có quyền owner."
+              : message.includes("TASK_RESULT_REQUIRED")
+                ? "Cần lưu kết quả trước khi xác nhận hoàn tất."
+                : message.includes("WORKSPACE_DATABASE_NOT_CONFIGURED")
+                  ? "Kho dữ liệu máy chủ chưa được cấu hình."
+                  : "Không thể ghi nhận xác nhận hoàn tất. Trạng thái chưa được thay đổi."
+      );
+    } finally {
+      setCompleting(false);
+    }
+  }
+
   return (
     <div className="flex flex-wrap gap-2">
       {task.status === "running" ? <Button variant="secondary" onClick={() => setStatus(task.id, "review")}>Đưa sang soát</Button> : null}
       {task.status === "running" || task.status === "review" ? (
-        <Button variant="secondary" onClick={() => setStatus(task.id, "done")} disabled={!task.assigneeId}>Hoàn thành</Button>
+        <Button variant="secondary" onClick={attestCompletion} disabled={completing || !task.assigneeId || !task.result?.trim()}>
+          {completing ? "Đang xác nhận..." : "Owner xác nhận hoàn tất"}
+        </Button>
       ) : null}
       {task.status !== "done" && task.status !== "failed" ? (
         <Button variant="danger" onClick={() => setStatus(task.id, "failed")}>Đánh dấu thất bại</Button>
@@ -390,7 +424,7 @@ export function TasksView() {
       <PageHeader
         kicker="Nhiệm vụ"
         title="Theo dõi và chuyển giao"
-        lede="Theo dõi từng pha từ lúc được phân công, chuyển cho AI bên ngoài, nhận kết quả đến CEO soát xét. Trạng thái chỉ đổi khi có thao tác xác nhận; không giả lập AI bên ngoài đang chạy."
+        lede="Theo dõi từng pha từ lúc được phân công, chuyển cho AI bên ngoài, nhận kết quả đến CEO soát xét. Hoàn tất chỉ được ghi nhận bằng owner attestation phía máy chủ; đây chưa phải xác minh CI/commit."
       />
       <div className="mb-3 grid gap-3 sm:grid-cols-2">
         <Field label="Dự án">
