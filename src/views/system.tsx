@@ -113,6 +113,8 @@ export function SettingsView() {
     provider: "gemini" | "deepseek" | "groq" | "openrouter";
     configured: boolean;
     adapterImplemented: boolean;
+    enabled: boolean;
+    modelConfigured: boolean;
     connectivity: "not_checked";
   }>>([]);
   const [readinessError, setReadinessError] = useState("");
@@ -135,7 +137,7 @@ export function SettingsView() {
     setAiError("");
     try {
       const result = await checkAiConnection();
-      const provider = result.provider === "gemini" ? "Google Gemini" : "OpenRouter";
+      const provider = result.provider === "gemini" ? "Google Gemini" : result.provider === "deepseek" ? "DeepSeek" : result.provider === "groq" ? "Groq" : "OpenRouter";
       setAiStatus(`Kết nối thành công: ${provider} · ${result.model}${result.fallbackUsed ? " · đã dùng tuyến dự phòng" : ""}.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
@@ -217,11 +219,13 @@ export function SettingsView() {
                 <p className="text-sm font-medium capitalize">{item.provider === "gemini" ? "Google Gemini" : item.provider === "deepseek" ? "DeepSeek" : item.provider === "groq" ? "Groq" : "OpenRouter"}</p>
                 <p className="mt-1 text-xs text-muted">API key: {item.configured ? "Đã cấu hình" : "Chưa cấu hình"}</p>
                 <p className="text-xs text-muted">Adapter: {item.adapterImplemented ? "Đã triển khai" : "Chưa triển khai"}</p>
+                <p className="text-xs text-muted">Model: {item.modelConfigured ? "Đã chọn" : "Chưa cấu hình"}</p>
+                <p className="text-xs text-muted">Fallback: {item.enabled ? "Được bật" : "Đang tắt"}</p>
                 <p className="text-xs text-muted">Kết nối: Chưa kiểm tra</p>
               </div>
             ))}
           </div>
-          <p className="text-xs text-faint">Không có API key hoặc secret nào được gửi về trình duyệt. DeepSeek/Groq có thể đã có biến môi trường nhưng hiện chưa có adapter thực thi.</p>
+          <p className="text-xs text-faint">Không có API key hoặc secret nào được gửi về trình duyệt. DeepSeek/Groq chỉ được tự động dùng làm tuyến dự phòng khi đã có key, model và bật cờ AI_ENABLE_DEEPSEEK_FALLBACK / AI_ENABLE_GROQ_FALLBACK. Hai cờ này mặc định tắt để tránh phát sinh chi phí ngoài dự kiến.</p>
           <div className="flex flex-wrap items-center gap-3">
             <Button onClick={runAiCheck} disabled={aiChecking}>{aiChecking ? "Đang kiểm tra..." : "Gửi request kiểm tra kết nối thật"}</Button>
             {aiStatus ? <p className="text-sm font-medium text-ok">{aiStatus}</p> : null}
