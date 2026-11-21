@@ -1,6 +1,7 @@
 import { getRequest } from "@tanstack/react-start/server";
 import { gateIdentityEnabled } from "./gate-identity.server";
 import { auth, authConfigured } from "./server";
+import { isProtectedVercelHostname } from "./deployment-protection.server";
 
 /**
  * Server-side session resolution (server-only).
@@ -20,21 +21,34 @@ const databaseConfigured = Boolean(process.env.DATABASE_URL?.trim());
  * deployments. The project must keep Vercel Deployment Protection (SSO)
  * enabled and must not attach an unprotected custom domain.
  */
-const isProtectedVercelDeployment =
-  process.env.VERCEL === "1" &&
-  (process.env.VERCEL_ENV === "production" || process.env.VERCEL_ENV === "preview");
+function isProtectedVercelDeployment(): boolean {
+  if (
+    process.env.VERCEL !== "1" ||
+    (process.env.VERCEL_ENV !== "production" && process.env.VERCEL_ENV !== "preview")
+  ) {
+    return false;
+  }
+  const request = getRequest();
+  if (!request) return false;
+  try {
+    return isProtectedVercelHostname(new URL(request.url).hostname);
+  } catch {
+    return false;
+  }
+}
 
-const singleUserModeEnabled =
-  process.env.SINGLE_USER_MODE === "true" && isProtectedVercelDeployment;
+function singleUserModeEnabled(): boolean {
+  return process.env.SINGLE_USER_MODE === "true" && isProtectedVercelDeployment();
+}
 
 /** Re-export so callers can branch on it without importing `server.ts`. */
 export { authConfigured };
 
 if (databaseConfigured && !authConfigured) {
   console.error(
-    "[auth] DATABASE_URL is set but auth is disabled (VITE_AUTH_ENABLED=false) " +
-      "— requireUserId() will reject every request (fail closed) rather than " +
-      "share one dev user on a real database.",
+    "[auth] DATABASE_URL is set but auth is disabled (VITE_AUTH_ENABLED=false). " +
+      "Shared dev-user is allowed only on Vercel-managed .vercel.app hosts with " +
+      "Deployment Protection; other hosts fail closed.",
   );
 }
 
@@ -94,17 +108,17 @@ export async function getSessionUser(
  * - Auth disabled + no database -> the shared dev user id.
  */
 export async function requireUserId(bearerToken?: string): Promise<string> {
-  if (!authConfigured && singleUserModeEnabled) {
+  if (!authConfigured && singleUserModeEnabled()) {
     return DEV_USER_ID;
   }
   if (!authConfigured && !gateIdentityEnabled()) {
-    if (isProtectedVercelDeployment && !singleUserModeEnabled) {
+    if (isProtectedVercelDeployment() && !singleUserModeEnabled()) {
       throw new Error(
         "Auth is disabled on Vercel. Explicitly configure protected single-owner mode " +
           "or enable authenticated access.",
       );
     }
-    if (databaseConfigured && !singleUserModeEnabled) {
+    if (databaseConfigured && !singleUserModeEnabled()) {
       throw new Error(
         "Auth is disabled while DATABASE_URL is set. Enable authenticated access " +
           "or explicitly configure protected single-owner mode.",
