@@ -22,6 +22,14 @@ export function appEnvPlugin() {
           next();
           return;
         }
+        const remoteAddress = req.socket?.remoteAddress ?? "";
+        const isLoopback = remoteAddress === "127.0.0.1" || remoteAddress === "::1" || remoteAddress === "::ffff:127.0.0.1";
+        if (!isLoopback) {
+          res.statusCode = 403;
+          res.setHeader("cache-control", "no-store");
+          res.end();
+          return;
+        }
         const body = Buffer.from(JSON.stringify(server.config.env), "utf8");
         res.statusCode = 200;
         res.setHeader("content-type", "application/json; charset=utf-8");
