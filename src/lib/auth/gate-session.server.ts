@@ -51,7 +51,7 @@ async function emitSessionCookie(
       cookieOptions,
     );
   } catch (err) {
-    console.error(`${LOG} setSignedCookie failed`, err);
+    console.error(`${LOG} setSignedCookie failed`, { errorType: safeErrorType(err) });
     return null;
   }
 
@@ -60,7 +60,8 @@ async function emitSessionCookie(
   )?.value;
   if (!sessionValue) {
     console.error(`${LOG} signed Set-Cookie missing session token value`, {
-      cookiePreview: signedCookie.slice(0, 120),
+      cookieName: sessionTokenName,
+      cookieLength: signedCookie.length,
     });
     return null;
   }
@@ -77,7 +78,7 @@ async function emitSessionCookie(
       domain: cookieOptions.domain,
     });
   } catch (err) {
-    console.error(`${LOG} TanStack setCookie failed`, err);
+    console.error(`${LOG} TanStack setCookie failed`, { errorType: safeErrorType(err) });
   }
 
   // Also stash on Better Auth responseHeaders so after-hooks (tanstackStartCookies)
@@ -90,7 +91,7 @@ async function emitSessionCookie(
       console.error(`${LOG} ctx.context.responseHeaders is missing`);
     }
   } catch (err) {
-    console.error(`${LOG} responseHeaders.append(set-cookie) failed`, err);
+    console.error(`${LOG} responseHeaders.append(set-cookie) failed`, { errorType: safeErrorType(err) });
   }
 
   return sessionValue;
@@ -119,7 +120,7 @@ async function expireSessionDataCookie(
       maxAge: 0,
     });
   } catch (err) {
-    console.error(`${LOG} TanStack setCookie (expire session_data) failed`, err);
+    console.error(`${LOG} TanStack setCookie (expire session_data) failed`, { errorType: safeErrorType(err) });
   }
   try {
     ctx.context.responseHeaders?.append(
@@ -130,7 +131,7 @@ async function expireSessionDataCookie(
   } catch (err) {
     console.error(
       `${LOG} responseHeaders.append (expire session_data) failed`,
-      err,
+      { errorType: safeErrorType(err) },
     );
   }
 }
@@ -162,7 +163,7 @@ async function writeGateMarkerCookie(
       maxAge,
     });
   } catch (err) {
-    console.error(`${LOG} TanStack setCookie (gate marker) failed`, err);
+    console.error(`${LOG} TanStack setCookie (gate marker) failed`, { errorType: safeErrorType(err) });
   }
   try {
     ctx.context.responseHeaders?.append(
@@ -171,7 +172,7 @@ async function writeGateMarkerCookie(
         (maxAge === undefined ? "" : `; Max-Age=${maxAge}`),
     );
   } catch (err) {
-    console.error(`${LOG} responseHeaders.append (gate marker) failed`, err);
+    console.error(`${LOG} responseHeaders.append (gate marker) failed`, { errorType: safeErrorType(err) });
   }
 }
 
@@ -238,14 +239,14 @@ export function gateIdentitySessions() {
             const cookieHeader = inbound.get("cookie") ?? "";
             if (cookieHeader.includes(`${sessionCookieName}=`)) {
               const existing = await getSessionFromCtx(ctx).catch((err) => {
-                console.error(`${LOG} getSessionFromCtx failed`, err);
+                console.error(`${LOG} getSessionFromCtx failed`, { errorType: safeErrorType(err) });
                 return null;
               });
               if (existing?.session && existing.user) {
                 const accounts = await ctx.context.internalAdapter
                   .findAccounts(existing.user.id)
                   .catch((err) => {
-                    console.error(`${LOG} findAccounts failed`, err);
+                    console.error(`${LOG} findAccounts failed`, { errorType: safeErrorType(err) });
                     return null;
                   });
                 if (!accounts) {
@@ -270,7 +271,7 @@ export function gateIdentitySessions() {
                   .catch((err) => {
                     console.error(
                       `${LOG} deleteSession (stale non-gate session) failed`,
-                      err,
+                      { errorType: safeErrorType(err) },
                     );
                     return null;
                   });
@@ -288,9 +289,8 @@ export function gateIdentitySessions() {
               });
               if (result.error || !result.data) {
                 console.error(`${LOG} handleOAuthUserInfo failed`, {
-                  error: result.error,
+                  hasError: Boolean(result.error),
                   hasData: Boolean(result.data),
-                  sub: identity.sub,
                 });
                 return;
               }
@@ -328,7 +328,7 @@ export function gateIdentitySessions() {
               removeRequestCookie(headers, sessionDataCookie.name);
               return { context: { headers } };
             } catch (err) {
-              console.error(`${LOG} gate identity session hook threw`, err);
+              console.error(`${LOG} gate identity session hook threw`, { errorType: safeErrorType(err) });
               return;
             }
           }),
