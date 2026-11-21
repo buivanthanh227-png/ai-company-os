@@ -77,7 +77,10 @@ function NavLinks({ search, onPick }: { search: AppSearch; onPick?: () => void }
     <div className="flex flex-col gap-3">
       {NAV.map((group) => (
         <div key={group.group}>
-          <p className="flex items-center gap-2 px-3 text-sm font-semibold tracking-wide text-faint"><span className="h-1.5 w-1.5 rounded-full bg-accent/70" aria-hidden="true" />{group.group}</p>
+          <p className="flex items-center gap-2 px-3 text-sm font-semibold tracking-wide text-faint">
+            <span className="h-1.5 w-1.5 rounded-full bg-accent/70" aria-hidden="true" />
+            {group.group}
+          </p>
           <div className="mt-1.5 flex flex-col gap-0.5">
             {group.items.map((item) => {
               const Icon = item.icon;
