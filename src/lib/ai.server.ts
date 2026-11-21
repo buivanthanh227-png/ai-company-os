@@ -468,10 +468,10 @@ export type AiProviderReadiness = {
 /** Metadata-only readiness check. Never returns secrets or calls provider APIs. */
 export function getAiProviderReadiness(): AiProviderReadiness[] {
   return [
-    { provider: "gemini", configured: Boolean(env("GEMINI_API_KEY")), adapterImplemented: true, enabled: true, modelConfigured: true, connectivity: "not_checked" },
+    { provider: "gemini", configured: Boolean(env("GEMINI_API_KEY")), adapterImplemented: true, enabled: Boolean(env("GEMINI_API_KEY")), modelConfigured: true, connectivity: "not_checked" },
     { provider: "deepseek", configured: Boolean(env("DEEPSEEK_API_KEY")), adapterImplemented: true, enabled: env("AI_ENABLE_DEEPSEEK_FALLBACK") === "true", modelConfigured: Boolean(env("DEEPSEEK_MODEL")), connectivity: "not_checked" },
     { provider: "groq", configured: Boolean(env("GROQ_API_KEY")), adapterImplemented: true, enabled: env("AI_ENABLE_GROQ_FALLBACK") === "true", modelConfigured: Boolean(env("GROQ_MODEL")), connectivity: "not_checked" },
-    { provider: "openrouter", configured: Boolean(env("OPENROUTER_API_KEY")), adapterImplemented: true, enabled: true, modelConfigured: true, connectivity: "not_checked" },
+    { provider: "openrouter", configured: Boolean(env("OPENROUTER_API_KEY")), adapterImplemented: true, enabled: Boolean(env("OPENROUTER_API_KEY")), modelConfigured: true, connectivity: "not_checked" },
   ];
 }
 
