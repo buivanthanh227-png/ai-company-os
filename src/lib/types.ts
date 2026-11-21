@@ -163,6 +163,7 @@ export type ChatMessage = {
   role: "chairman" | "ceo";
   text: string;
   source?: "local" | "gemini" | "deepseek" | "groq" | "openrouter";
+  model?: string;
 };
 
 export type Settings = {
