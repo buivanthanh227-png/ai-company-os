@@ -279,6 +279,7 @@ async function callGemini(input: AiChatInput): Promise<AiReply> {
   ].filter((m, i, arr): m is string => Boolean(m) && arr.indexOf(m) === i);
 
   const failures: string[] = [];
+  let lastFailure: ProviderFailure | undefined;
 
   for (const model of candidates) {
     try {
@@ -305,9 +306,11 @@ async function callGemini(input: AiChatInput): Promise<AiReply> {
       if (text) {
         return { text, provider: "gemini", model, fallbackUsed: false };
       }
+      lastFailure = providerFailure("Provider returned an empty response");
       failures.push(`${model}: empty response`);
     } catch (err) {
       const failure = err as ProviderFailure;
+      lastFailure = failure;
       const status = failure.status ? ` (HTTP ${failure.status})` : "";
       failures.push(`${model}: ${failure.message}${status}`);
       // Authentication/permission errors apply to the key, not the model.
@@ -319,8 +322,11 @@ async function callGemini(input: AiChatInput): Promise<AiReply> {
     }
   }
 
-  const summary = failures.slice(0, 3).join("; ");
-  throw providerFailure(`Gemini failed on all models: ${summary}`);
+  throw providerFailure(
+    "Gemini failed on all configured models",
+    lastFailure?.status,
+    lastFailure?.kind,
+  );
 }
 
 async function callOpenRouter(input: AiChatInput, fallbackUsed: boolean): Promise<AiReply> {
