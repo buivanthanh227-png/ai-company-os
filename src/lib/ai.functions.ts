@@ -24,3 +24,10 @@ export const checkAiConnection = createServerFn({ method: "POST" })
       throw toPublicAiError(error);
     }
   });
+
+export const getAiProviderReadiness = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async () => {
+    const { getAiProviderReadiness } = await import("./ai.server");
+    return getAiProviderReadiness();
+  });
