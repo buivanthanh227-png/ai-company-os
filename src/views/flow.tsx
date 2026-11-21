@@ -44,6 +44,7 @@ export function CeoView() {
   const [visibleFrom, setVisibleFrom] = useState(messages.length);
   const [mode, setMode] = useState<"ai" | "local">("ai");
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
   const [notice, setNotice] = useState("");
   const [files, setFiles] = useState<Array<{ file: File; data?: string; content?: string }>>([]);
   const [listening, setListening] = useState(false);
@@ -105,7 +106,7 @@ export function CeoView() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const prompt = text.trim();
-    if ((!prompt && !files.length) || busy) return;
+    if ((!prompt && !files.length) || busyRef.current) return;
     setText(""); setNotice("");
     setVisibleFrom(messages.length);
     setConversationOpen(true);
@@ -116,6 +117,7 @@ export function CeoView() {
     const missionIntent = interpret(prompt || "");
     const missionBrief = (prompt || "Vui lòng xử lý tệp đính kèm.") + labels;
     if (mode === "local") { sendLocalChat(message + labels); setFiles([]); return; }
+    busyRef.current = true;
     setBusy(true);
     // Show the user's message immediately; network latency should only affect the assistant reply indicator.
     appendChatMessage("chairman", (prompt || "Vui lòng xem tệp đính kèm.") + labels);
@@ -139,20 +141,23 @@ export function CeoView() {
       setNotice(result.provider === "gemini" ? "Đã trả lời bằng Google Gemini." : "Đã trả lời bằng OpenRouter" + (result.fallbackUsed ? " (dự phòng)." : "."));
     } catch (error) {
       const msg = error instanceof Error ? error.message : "";
-      const answer = msg.includes("Unauthorized")
+      const answer = msg === "Unauthorized"
         ? "Phiên đăng nhập chưa hợp lệ. Vui lòng đăng nhập lại."
-        : msg.includes("AI_NOT_CONFIGURED")
-          ? "Chưa cấu hình khóa AI trên máy chủ. Hãy kiểm tra cấu hình Vercel."
-          : msg.includes("AI_PROVIDER_UNAVAILABLE:BOTH")
-            ? "Gemini và OpenRouter đều chưa phản hồi. Vui lòng thử lại sau."
-            : "Hiện chưa kết nối được nhà cung cấp AI. Yêu cầu chưa được xử lý.";
+        : msg === "AI_NOT_CONFIGURED"
+          ? "Chưa cấu hình nhà cung cấp AI trên máy chủ."
+          : msg === "AI_PROVIDER_RATE_LIMITED"
+            ? "Nhà cung cấp AI đang giới hạn tần suất. Hãy chờ rồi thử lại."
+            : msg === "AI_PROVIDER_AUTH_FAILED"
+              ? "Nhà cung cấp AI từ chối xác thực. Quản trị viên cần kiểm tra cấu hình máy chủ."
+              : msg === "AI_PROVIDER_TIMEOUT"
+                ? "Nhà cung cấp AI phản hồi quá thời gian cho phép. Hãy thử lại sau."
+                : "Nhà cung cấp AI hiện không khả dụng. Yêu cầu chưa được xử lý.";
       appendChatMessage("ceo", answer, "local");
-      if (missionIntent.type === "mission") {
-        const project = projects.find((item) => item.name === "Việc từ phòng CEO");
-        createMission({ projectId: project?.id ?? "new", projectName: "Việc từ phòng CEO", title: missionIntent.title, brief: missionBrief, kind: missionIntent.kind, priority: "P1" });
-      }
-      setNotice("Kết nối AI chưa sẵn sàng; CEO vẫn đã lập luồng giao việc nội bộ.");
-    } finally { setBusy(false); }
+      setNotice("Yêu cầu AI chưa hoàn tất. Xem thông báo trong hội thoại để biết nguyên nhân.");
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
   }
 
   return (
