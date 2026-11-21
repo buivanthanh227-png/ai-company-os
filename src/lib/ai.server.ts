@@ -219,6 +219,14 @@ function extractOpenAiCompatibleText(payload: unknown): string {
   return "";
 }
 
+function extractResponseModel(payload: unknown, configuredModel: string): string {
+  if (payload && typeof payload === "object" && "model" in payload) {
+    const actual = (payload as { model?: unknown }).model;
+    if (typeof actual === "string" && actual.trim()) return actual.trim();
+  }
+  return configuredModel;
+}
+
 function getCurrentTimeContext(): string {
   try {
     const now = new Date();
@@ -369,7 +377,7 @@ async function callOpenAiCompatible(
   );
   const text = extractOpenAiCompatibleText(payload);
   if (!text) throw providerFailure("Provider returned an empty response");
-  return { text, provider, model, fallbackUsed };
+  return { text, provider, model: extractResponseModel(payload, model), fallbackUsed };
 }
 
 async function callDeepSeek(input: AiChatInput, fallbackUsed: boolean): Promise<AiReply> {
@@ -419,7 +427,7 @@ async function callOpenRouter(input: AiChatInput, fallbackUsed: boolean): Promis
   );
   const text = extractOpenAiCompatibleText(payload);
   if (!text) throw providerFailure("OpenRouter returned an empty response");
-  return { text, provider: "openrouter", model, fallbackUsed };
+  return { text, provider: "openrouter", model: extractResponseModel(payload, model), fallbackUsed };
 }
 
 export async function runAiChat(rawInput: unknown): Promise<AiReply> {
