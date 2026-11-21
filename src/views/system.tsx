@@ -15,7 +15,7 @@ const DOCS = [
   },
   {
     title: "Cái gì đang mô phỏng",
-    body: "Bộ lập kế hoạch, chấm điểm nhân sự, phân công và chuyển giao vẫn dùng logic cục bộ. Gateway Gemini Router đã được bổ sung ở backend: Gemini là tuyến chính, OpenRouter là tuyến dự phòng; khóa chỉ đọc từ biến môi trường máy chủ. Chỉ được xem là AI chạy thật sau khi deploy backend, bật xác thực, cấu hình khóa và phép thử kết nối trả về provider/model. Ngân sách 0–100 vẫn là thước nội bộ, không phải token nhà cung cấp.",
+    body: "Bộ lập kế hoạch, chấm điểm nhân sự, phân công và chuyển giao vẫn dùng logic cục bộ. Gateway backend có adapter Gemini, DeepSeek, Groq và OpenRouter. Gemini là tuyến chính; DeepSeek/Groq chỉ được bật làm tuyến dự phòng khi có key, model và cờ opt-in; OpenRouter là tuyến dự phòng cuối. Chỉ được xem là provider hoạt động sau khi có request kiểm tra thật trả về provider/model. Ngân sách 0–100 vẫn là thước nội bộ, không phải token nhà cung cấp.",
   },
   {
     title: "Quy tắc chuyển giao",
@@ -27,7 +27,7 @@ const DOCS = [
   },
   {
     title: "Kiến trúc giai đoạn 2",
-    body: "Backend Vercel dùng Nitro/TanStack Start sẵn có. Gateway Gemini Router được đặt trong module server-only; khóa nằm trong Environment Variables, không vào trình duyệt hay git. Gemini là tuyến chính; OpenRouter free router là tuyến dự phòng khi lỗi mạng, timeout, rate limit hoặc 5xx. Server function yêu cầu authMiddleware. Hàng đợi bền, nhật ký token/chi phí và giới hạn tốc độ dùng chung giữa các instance vẫn là các phần tiếp theo. GitHub Pages chỉ phát bản giao diện tĩnh, không chạy gateway này.",
+    body: "Backend Vercel dùng Nitro/TanStack Start sẵn có. Gateway nằm trong module server-only; khóa chỉ đọc từ Environment Variables. Gemini là tuyến chính; DeepSeek/Groq có adapter tương thích Chat Completions nhưng mặc định tắt, chỉ được gọi khi quản trị viên bật cờ opt-in và cấu hình model. OpenRouter là tuyến dự phòng cuối. Server function yêu cầu authMiddleware. Hàng đợi bền, nhật ký token/chi phí và giới hạn tốc độ dùng chung giữa các instance vẫn là các phần tiếp theo. GitHub Pages chỉ phát bản giao diện tĩnh, không chạy gateway này.",
   },
   {
     title: "Triển khai",
@@ -146,7 +146,13 @@ export function SettingsView() {
           ? "Chưa cấu hình GEMINI_API_KEY hoặc OPENROUTER_API_KEY trong Vercel."
           : message === "Unauthorized"
             ? "Cần đăng nhập hợp lệ trước khi gọi AI."
-            : "Chưa kết nối được AI. Kiểm tra biến môi trường, xác thực và nhật ký Vercel.",
+            : message === "AI_PROVIDER_RATE_LIMITED"
+              ? "Provider đang giới hạn tần suất; hãy thử lại sau."
+              : message === "AI_PROVIDER_AUTH_FAILED"
+                ? "Provider từ chối xác thực; quản trị viên cần kiểm tra cấu hình."
+                : message === "AI_PROVIDER_TIMEOUT"
+                  ? "Request kiểm tra đã hết thời gian chờ."
+                  : "Chưa kết nối được AI. Kiểm tra cấu hình máy chủ và nhật ký Vercel.",
       );
     } finally {
       setAiChecking(false);
