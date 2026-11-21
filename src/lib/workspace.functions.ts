@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { authMiddleware } from "@/lib/auth/middleware";
+import type { Sql } from "@/lib/db";
 import { requireOwnerUserId } from "@/lib/auth/owner.server";
 import type { Snapshot } from "@/lib/store";
 import type { Proposal, Task } from "@/lib/types";
@@ -39,7 +40,7 @@ function requireWorkspaceDatabase(): void {
   }
 }
 
-async function readSnapshotForUser(userId: string, sql: Awaited<ReturnType<typeof import("@/lib/db").getSql>>): Promise<Snapshot> {
+async function readSnapshotForUser(userId: string, sql: Sql): Promise<Snapshot> {
   const rows = await sql.query<{ snapshot: unknown }>(
     "select snapshot from app_state where user_id = $1 limit 1",
     [userId],
