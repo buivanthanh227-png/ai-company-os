@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   applyAuthoritativeWorkspaceRecords,
   proposalPayloadHash,
+  resultContentHash,
   sanitizeClientSnapshot,
   taskCompletionHash,
 } from "./workspace-integrity.server.ts";
@@ -95,7 +96,7 @@ test("task completion is restored only for the exact task/result hash", () => {
   const completion = {
     task_id: task.id,
     task_hash: taskCompletionHash(task),
-    result_hash: "result-hash",
+    result_hash: resultContentHash(task.result ?? ""),
     actor_user_id: "authenticated-owner",
     created_at: "2026-11-21T00:01:00.000Z",
   };
@@ -104,4 +105,27 @@ test("task completion is restored only for the exact task/result hash", () => {
   current.tasks[0]!.result = "tampered result";
   const changed = applyAuthoritativeWorkspaceRecords(current, [], [completion]);
   assert.equal(changed.tasks[0]?.status, "review");
+});
+
+
+test("owner authorization rejects shared dev identity and requires explicit allowlist", async () => {
+  const { requireOwnerUserId } = await import("./auth/owner.server.ts");
+  const previous = process.env.AI_COMPANY_OWNER_USER_IDS;
+  delete process.env.AI_COMPANY_OWNER_USER_IDS;
+  assert.throws(() => requireOwnerUserId("authenticated-owner"), {
+    message: "OWNER_AUTHORIZATION_NOT_CONFIGURED",
+  });
+  process.env.AI_COMPANY_OWNER_USER_IDS = "authenticated-owner";
+  try {
+    assert.throws(() => requireOwnerUserId("dev-user"), {
+      message: "OWNER_IDENTITY_NOT_UNIQUE",
+    });
+    assert.throws(() => requireOwnerUserId("other-user"), {
+      message: "OWNER_FORBIDDEN",
+    });
+    assert.doesNotThrow(() => requireOwnerUserId("authenticated-owner"));
+  } finally {
+    if (previous === undefined) delete process.env.AI_COMPANY_OWNER_USER_IDS;
+    else process.env.AI_COMPANY_OWNER_USER_IDS = previous;
+  }
 });
