@@ -138,7 +138,8 @@ export function CeoView() {
       const result = await sendAiMessage({ data: { message, history, context: includeContext ? context : undefined, attachments: images } });
       appendChatMessage("ceo", result.text, result.provider);
       setFiles([]);
-      setNotice(result.provider === "gemini" ? "Đã trả lời bằng Google Gemini." : "Đã trả lời bằng OpenRouter" + (result.fallbackUsed ? " (dự phòng)." : "."));
+      const providerLabel = result.provider === "gemini" ? "Google Gemini" : result.provider === "deepseek" ? "DeepSeek" : result.provider === "groq" ? "Groq" : "OpenRouter";
+      setNotice(`Đã trả lời bằng ${providerLabel}${result.fallbackUsed ? " (dự phòng)." : "."}`);
     } catch (error) {
       const msg = error instanceof Error ? error.message : "";
       const answer = msg === "Unauthorized"
@@ -175,7 +176,7 @@ export function CeoView() {
               <article key={m.id} className={m.role === "ceo" ? "flex gap-3" : "ml-auto max-w-[88%] rounded-2xl bg-subtle px-4 py-3"}>
                 {m.role === "ceo" ? <div className="grid size-8 shrink-0 place-items-center rounded-full border border-line bg-elevated text-accent"><MessagesSquare className="size-4" /></div> : null}
                 <div className="min-w-0 flex-1">
-                  {m.role === "ceo" ? <p className="mb-1 text-xs font-medium text-muted">Trợ lý AI · {m.source === "gemini" ? "Gemini" : m.source === "openrouter" ? "OpenRouter" : "Nội bộ"}</p> : null}
+                  {m.role === "ceo" ? <p className="mb-1 text-xs font-medium text-muted">Trợ lý AI · {m.source === "gemini" ? "Gemini" : m.source === "deepseek" ? "DeepSeek" : m.source === "groq" ? "Groq" : m.source === "openrouter" ? "OpenRouter" : "Nội bộ"}</p> : null}
                   <p className="whitespace-pre-wrap text-sm leading-7 text-fg">{m.text}</p>
                   {m.role === "chairman" && interpret(m.text).type === "mission" ? (
                     <div className="mt-2">
