@@ -61,8 +61,10 @@ if (baselineRequested) {
 
 const timeoutMs = Number(process.env.BROWSER_SMOKE_TIMEOUT_MS || 45000);
 
+const tabletPng = outPng.replace(/\\.png$/i, "-tablet.png");
 const VIEWPORTS = [
   { name: "desktop", width: 1280, height: 800, screenshot: outPng },
+  { name: "tablet", width: 768, height: 1024, screenshot: tabletPng },
   { name: "mobile", width: 390, height: 844, screenshot: mobilePng },
 ];
 
