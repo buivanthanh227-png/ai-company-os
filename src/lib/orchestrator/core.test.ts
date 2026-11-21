@@ -168,6 +168,24 @@ test("execution success is distinct from accepted completion and review cannot b
   assert.equal(matchesReview(item, review(item, { taskRevision: 2 })), false);
 });
 
+
+test("approval and review timestamps must be canonical UTC ISO strings", () => {
+  const item = { ...task("deploy"), approvalRequired: true };
+  assert.equal(matchesApproval(item, approval(item, { approvedAt: "2026-11-20" })), false);
+  assert.equal(matchesApproval(item, approval(item, { approvedAt: "Nov 20, 2026 10:00:00 GMT" })), false);
+  assert.equal(matchesApproval(item, approval(item, { approvedAt: "2026-02-31T10:00:00.000Z" })), false);
+  assert.equal(matchesReview({ ...item, reviewRequired: true }, review(item, { reviewedAt: "2026-11-20T10:00:00+00:00" })), false);
+});
+
+test("runtime dispatch fails closed on malformed graph nodes and duplicate dependencies", () => {
+  const child = task("child", ["parent"]);
+  const parent = { ...task("parent"), status: "succeeded" as const };
+  assert.equal(isTaskDispatchable(child, [parent, { ...child, dependsOn: ["parent", "parent"] }]), false);
+  assert.equal(isTaskDispatchable(child, [parent, { ...child, status: "unknown" } as unknown as RuntimeTask]), false);
+  assert.deepEqual(getDispatchableTasks([child, null as unknown as RuntimeTask]), []);
+  assert.deepEqual(getDispatchableTasks(null as unknown as RuntimeTask[]), []);
+});
+
 test("terminal states cannot be reopened", () => {
   for (const status of ["succeeded", "failed", "cancelled"] as const) {
     assert.equal(canTransitionTaskStatus(status, "queued"), false);
