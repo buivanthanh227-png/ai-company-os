@@ -292,6 +292,10 @@ test("reports provider configuration without exposing keys or claiming connectiv
     deepseek: process.env.DEEPSEEK_API_KEY,
     groq: process.env.GROQ_API_KEY,
     openrouter: process.env.OPENROUTER_API_KEY,
+    deepseekModel: process.env.DEEPSEEK_MODEL,
+    groqModel: process.env.GROQ_MODEL,
+    deepseekEnabled: process.env.AI_ENABLE_DEEPSEEK_FALLBACK,
+    groqEnabled: process.env.AI_ENABLE_GROQ_FALLBACK,
   };
   process.env.GEMINI_API_KEY = "test-gemini-key";
   process.env.DEEPSEEK_API_KEY = "test-deepseek-key";
@@ -321,6 +325,14 @@ test("reports provider configuration without exposing keys or claiming connectiv
     else process.env.GROQ_API_KEY = previous.groq;
     if (previous.openrouter === undefined) delete process.env.OPENROUTER_API_KEY;
     else process.env.OPENROUTER_API_KEY = previous.openrouter;
+    if (previous.deepseekModel === undefined) delete process.env.DEEPSEEK_MODEL;
+    else process.env.DEEPSEEK_MODEL = previous.deepseekModel;
+    if (previous.groqModel === undefined) delete process.env.GROQ_MODEL;
+    else process.env.GROQ_MODEL = previous.groqModel;
+    if (previous.deepseekEnabled === undefined) delete process.env.AI_ENABLE_DEEPSEEK_FALLBACK;
+    else process.env.AI_ENABLE_DEEPSEEK_FALLBACK = previous.deepseekEnabled;
+    if (previous.groqEnabled === undefined) delete process.env.AI_ENABLE_GROQ_FALLBACK;
+    else process.env.AI_ENABLE_GROQ_FALLBACK = previous.groqEnabled;
   }
 });
 
@@ -401,6 +413,38 @@ test("uses the Groq adapter with OpenAI-compatible request shape when enabled", 
     assert.equal(reply.fallbackUsed, true);
     assert.equal(groqRequest?.authorization, "Bearer test-groq-key");
     assert.equal(groqRequest?.body.model, "groq-test-model");
+  } finally {
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});
+
+
+test("does not call configured DeepSeek or Groq keys unless fallback flags are enabled", async () => {
+  const names = ["GEMINI_API_KEY", "GEMINI_MODEL", "OPENROUTER_API_KEY", "DEEPSEEK_API_KEY", "DEEPSEEK_MODEL", "AI_ENABLE_DEEPSEEK_FALLBACK", "GROQ_API_KEY", "GROQ_MODEL", "AI_ENABLE_GROQ_FALLBACK"];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  process.env.GEMINI_API_KEY = "test-gemini-key";
+  process.env.GEMINI_MODEL = "test-single-model";
+  delete process.env.OPENROUTER_API_KEY;
+  process.env.DEEPSEEK_API_KEY = "test-deepseek-key";
+  process.env.DEEPSEEK_MODEL = "deepseek-test-model";
+  delete process.env.AI_ENABLE_DEEPSEEK_FALLBACK;
+  process.env.GROQ_API_KEY = "test-groq-key";
+  process.env.GROQ_MODEL = "groq-test-model";
+  delete process.env.AI_ENABLE_GROQ_FALLBACK;
+  const called: string[] = [];
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    called.push(url);
+    return new Response("unavailable", { status: 503 });
+  };
+
+  try {
+    await assert.rejects(runAiChat({ message: "No automatic fallback", history: [] }));
+    assert.equal(called.some((url) => url.includes("api.deepseek.com")), false);
+    assert.equal(called.some((url) => url.includes("api.groq.com")), false);
   } finally {
     for (const name of names) {
       if (previous[name] === undefined) delete process.env[name];
