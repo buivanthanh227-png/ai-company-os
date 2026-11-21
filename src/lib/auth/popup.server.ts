@@ -75,11 +75,10 @@ export async function handleAuthPopupRequest(request: Request): Promise<Response
     });
 
     if (!apiRes.ok) {
-      const detail = await apiRes.text().catch(() => "");
       return completionResponse({
         source: "grok-auth-popup",
         token: null,
-        error: detail || `oauth_init_failed_${apiRes.status}`,
+        error: `oauth_init_failed_${apiRes.status}`,
       });
     }
 
@@ -102,12 +101,11 @@ export async function handleAuthPopupRequest(request: Request): Promise<Response
       headers.append("set-cookie", cookie);
     }
     return new Response(null, { status: 302, headers });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "oauth_init_threw";
+  } catch {
     return completionResponse({
       source: "grok-auth-popup",
       token: null,
-      error: message,
+      error: "oauth_init_threw",
     });
   }
 }
