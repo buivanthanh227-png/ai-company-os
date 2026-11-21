@@ -129,6 +129,8 @@ test("dispatch fails closed without matching approval and on duplicate runtime I
   assert.equal(isTaskDispatchable({ ...protectedTask, approvalRequired: undefined } as unknown as RuntimeTask, [protectedTask], [approval(protectedTask)]), false);
   assert.equal(isTaskDispatchable({ ...protectedTask, reviewRequired: undefined } as unknown as RuntimeTask, [protectedTask], [approval(protectedTask)]), false);
   assert.equal(isTaskDispatchable(protectedTask, [protectedTask], [approval(protectedTask)]), true);
+  assert.equal(isTaskDispatchable({ ...protectedTask, contentHash: "forged-hash" }, [protectedTask], [approval(protectedTask)]), false);
+  assert.equal(isTaskDispatchable({ ...protectedTask, dependsOn: ["other"] }, [protectedTask], [approval(protectedTask)]), false);
   assert.equal(isTaskDispatchable(protectedTask, [protectedTask, { ...protectedTask }], [approval(protectedTask)]), false);
   assert.deepEqual(getDispatchableTasks([protectedTask, { ...protectedTask }], [approval(protectedTask)]), []);
 });
