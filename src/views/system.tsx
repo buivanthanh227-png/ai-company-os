@@ -115,7 +115,7 @@ export function SettingsView() {
     adapterImplemented: boolean;
     enabled: boolean;
     modelConfigured: boolean;
-    connectivity: "not_checked";
+    connectivity: "not_checked" | "success";
   }>>([]);
   const [readinessError, setReadinessError] = useState("");
 
@@ -138,6 +138,9 @@ export function SettingsView() {
     try {
       const result = await checkAiConnection();
       const provider = result.provider === "gemini" ? "Google Gemini" : result.provider === "deepseek" ? "DeepSeek" : result.provider === "groq" ? "Groq" : "OpenRouter";
+      setProviderReadiness((current) => current.map((item) =>
+        item.provider === result.provider ? { ...item, connectivity: "success" } : item,
+      ));
       setAiStatus(`Kết nối thành công: ${provider} · ${result.model}${result.fallbackUsed ? " · đã dùng tuyến dự phòng" : ""}.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
@@ -227,7 +230,7 @@ export function SettingsView() {
                 <p className="text-xs text-muted">Adapter: {item.adapterImplemented ? "Đã triển khai" : "Chưa triển khai"}</p>
                 <p className="text-xs text-muted">Model: {item.modelConfigured ? "Đã chọn" : "Chưa cấu hình"}</p>
                 <p className="text-xs text-muted">Fallback: {item.enabled ? "Được bật" : "Đang tắt"}</p>
-                <p className="text-xs text-muted">Kết nối: Chưa kiểm tra</p>
+                <p className="text-xs text-muted">Kết nối: {item.connectivity === "success" ? "Đã kiểm tra thành công trong phiên này" : "Chưa kiểm tra"}</p>
               </div>
             ))}
           </div>
