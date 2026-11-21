@@ -45,8 +45,11 @@ function providerFailure(
 
 /** Convert internal provider failures into a stable, non-sensitive client contract. */
 export function toPublicAiError(error: unknown): Error {
-  if (error instanceof Error && error.message === "AI_NOT_CONFIGURED") {
-    return new Error("AI_NOT_CONFIGURED");
+  if (
+    error instanceof Error &&
+    ["AI_NOT_CONFIGURED", "AI_DIAGNOSTICS_FORBIDDEN", "AI_DIAGNOSTICS_RATE_LIMITED"].includes(error.message)
+  ) {
+    return new Error(error.message);
   }
   const failure = error as ProviderFailure | null;
   if (failure?.kind === "timeout" || failure?.status === 408) {
@@ -481,6 +484,30 @@ export function getAiProviderReadiness(): AiProviderReadiness[] {
     { provider: "groq", configured: Boolean(env("GROQ_API_KEY")), adapterImplemented: true, enabled: env("AI_ENABLE_GROQ_FALLBACK") === "true", modelConfigured: Boolean(env("GROQ_MODEL")), connectivity: "not_checked" },
     { provider: "openrouter", configured: Boolean(env("OPENROUTER_API_KEY")), adapterImplemented: true, enabled: Boolean(env("OPENROUTER_API_KEY")), modelConfigured: true, connectivity: "not_checked" },
   ];
+}
+
+const liveDiagnosticsLastRun = new Map<string, number>();
+const LIVE_DIAGNOSTICS_COOLDOWN_MS = 60_000;
+
+/**
+ * Live diagnostics spend provider quota. Require an explicit server-side opt-in
+ * and an authenticated user-id allowlist. The in-memory cooldown is a
+ * best-effort per-instance guard; the allowlist remains the primary boundary.
+ */
+export function assertLiveDiagnosticsAllowed(userId: string, now = Date.now()): void {
+  const allowedUsers = (env("AI_DIAGNOSTICS_ALLOWED_USER_IDS") ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (env("AI_ALLOW_LIVE_DIAGNOSTICS") !== "true" || !allowedUsers.includes(userId)) {
+    throw new Error("AI_DIAGNOSTICS_FORBIDDEN");
+  }
+
+  const lastRun = liveDiagnosticsLastRun.get(userId);
+  if (lastRun !== undefined && now - lastRun < LIVE_DIAGNOSTICS_COOLDOWN_MS) {
+    throw new Error("AI_DIAGNOSTICS_RATE_LIMITED");
+  }
+  liveDiagnosticsLastRun.set(userId, now);
 }
 
 export async function testAiConnection(): Promise<Omit<AiReply, "text">> {
