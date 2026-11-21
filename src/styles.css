@@ -43,8 +43,8 @@
     background: var(--color-bg);
     color: var(--color-fg);
     font-family: var(--font-sans);
-    font-size: 16px;
-    line-height: 1.6;
+    font-size: 16.5px;
+    line-height: 1.65;
   }
 
   h1,
@@ -128,5 +128,19 @@
 
   .press:active {
     transform: none;
+  }
+}
+
+
+/* Improve readability in dense management screens without changing compact controls. */
+@layer utilities {
+  main .text-sm {
+    font-size: 0.9375rem;
+    line-height: 1.5;
+  }
+
+  main .text-xs {
+    font-size: 0.8125rem;
+    line-height: 1.45;
   }
 }
