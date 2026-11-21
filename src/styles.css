@@ -134,12 +134,12 @@
 
 /* Improve readability in dense management screens without changing compact controls. */
 @layer utilities {
-  main .text-sm {
+  main .text-sm:not(button):not(a):not([role="button"]):not(input):not(select):not(textarea) {
     font-size: 0.9375rem;
     line-height: 1.5;
   }
 
-  main .text-xs {
+  main .text-xs:not(button):not(a):not([role="button"]):not(input):not(select):not(textarea) {
     font-size: 0.8125rem;
     line-height: 1.45;
   }
