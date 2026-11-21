@@ -74,11 +74,11 @@ function activeView(view: string) {
 function NavLinks({ search, onPick }: { search: AppSearch; onPick?: () => void }) {
   const current = activeView(search.view);
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-3">
       {NAV.map((group) => (
         <div key={group.group}>
-          <p className="px-3 font-mono text-xs text-faint">{group.group}</p>
-          <div className="mt-1 flex flex-col gap-1">
+          <p className="flex items-center gap-2 px-3 text-sm font-semibold tracking-wide text-faint"><span className="h-1.5 w-1.5 rounded-full bg-accent/70" aria-hidden="true" />{group.group}</p>
+          <div className="mt-1.5 flex flex-col gap-0.5">
             {group.items.map((item) => {
               const Icon = item.icon;
               const on = current === item.view;
@@ -89,11 +89,13 @@ function NavLinks({ search, onPick }: { search: AppSearch; onPick?: () => void }
                   search={{ view: item.view, id: "", q: item.view === "staff" ? search.q : "" }}
                   onClick={onPick}
                   className={cn(
-                    "flex h-11 items-center gap-3 rounded-md px-3 text-sm",
-                    on ? "border border-line bg-subtle text-fg" : "text-muted",
+                    "group flex h-10 items-center gap-2.5 rounded-lg border border-transparent px-3 text-[15px] font-medium transition-colors",
+                    on
+                      ? "border-blue-200 bg-blue-50 text-blue-900 shadow-sm"
+                      : "text-muted hover:border-line hover:bg-subtle hover:text-fg",
                   )}
                 >
-                  <Icon className="size-4 shrink-0" aria-hidden="true" />
+                  <Icon className={cn("size-[18px] shrink-0", on ? "text-accent" : "text-faint group-hover:text-fg")} aria-hidden="true" />
                   {item.label}
                 </Link>
               );
@@ -109,10 +111,10 @@ function Side({ search, onPick }: { search: AppSearch; onPick?: () => void }) {
   const orgName = useOs((state) => state.settings.orgName);
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-3 px-3 py-4">
+      <div className="flex items-center gap-3 border-b border-line bg-subtle/60 px-3 py-3.5">
         <BrandMark />
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-fg">{orgName}</p>
+          <p className="truncate text-base font-semibold tracking-tight text-fg">{orgName}</p>
           <p className="font-mono text-xs text-faint">Tầng điều hành</p>
         </div>
       </div>
@@ -223,13 +225,13 @@ export function Shell({ search, children }: { search: AppSearch; children: React
 
   return (
     <div className="min-h-dvh bg-bg text-fg lg:flex">
-      <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 border-r border-line bg-elevated lg:flex">
+      <aside className="sticky top-0 hidden h-dvh w-72 shrink-0 border-r border-line bg-elevated lg:flex">
         <Side search={search} />
       </aside>
       {open ? (
         <div className="fixed inset-0 z-40 lg:hidden">
           <button className="absolute inset-0 bg-bg/80" aria-label="Đóng menu" onClick={() => setOpen(false)} />
-          <aside className="drawer relative flex h-full w-64 flex-col border-r border-line bg-elevated">
+          <aside className="drawer relative flex h-full w-72 flex-col border-r border-line bg-elevated">
             <Side search={search} onPick={() => setOpen(false)} />
           </aside>
         </div>
