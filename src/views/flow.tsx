@@ -383,7 +383,7 @@ function TaskActions({ task }: { task: Task }) {
                 ? "Cần lưu kết quả trước khi xác nhận hoàn tất."
                 : message.includes("WORKSPACE_DATABASE_NOT_CONFIGURED")
                   ? "Kho dữ liệu máy chủ chưa được cấu hình."
-                  : "Không thể ghi nhận xác nhận hoàn tất. Trạng thái chưa được thay đổi.";
+                  : "Không thể ghi nhận xác nhận hoàn tất. Trạng thái chưa được thay đổi."
       );
     } finally {
       setCompleting(false);
