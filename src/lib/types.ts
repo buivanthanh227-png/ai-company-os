@@ -162,7 +162,7 @@ export type ChatMessage = {
   at: string;
   role: "chairman" | "ceo";
   text: string;
-  source?: "local" | "gemini" | "openrouter";
+  source?: "local" | "gemini" | "deepseek" | "groq" | "openrouter";
 };
 
 export type Settings = {
