@@ -48,7 +48,7 @@ type OsState = Snapshot & {
   }) => string;
   assignDirect: (skill: SkillKey, title: string) => void;
   sendChat: (text: string) => void;
-  appendChatMessage: (role: ChatMessage["role"], text: string, source?: ChatMessage["source"]) => void;
+  appendChatMessage: (role: ChatMessage["role"], text: string, source?: ChatMessage["source"], model?: string) => void;
   affectTask: (taskId: string, reason: FailReason) => void;
   setTaskStatus: (taskId: string, status: Task["status"]) => void;
   saveTaskResult: (taskId: string, result: string) => void;
@@ -220,8 +220,8 @@ export const useOs = create<OsState>()(
           notice: task.history[0]!.text,
         });
       },
-      appendChatMessage: (role, text, source = role === "ceo" ? "local" : undefined) => {
-        const message: ChatMessage = { id: nid("MSG"), at: nowIso(), role, text, source };
+      appendChatMessage: (role, text, source = role === "ceo" ? "local" : undefined, model) => {
+        const message: ChatMessage = { id: nid("MSG"), at: nowIso(), role, text, source, model };
         set({ messages: [...get().messages, message].slice(-100) });
       },
       sendChat: (text) => {
