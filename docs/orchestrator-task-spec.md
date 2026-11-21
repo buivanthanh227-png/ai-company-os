@@ -1,10 +1,16 @@
 # Đặc tả kỹ thuật: orchestrateTask
 
-**Trạng thái:** Đã triển khai một phần lớp phân công và chuyển giao thủ công trong Chat CEO. Worker gọi AI ngoài, hàng đợi bền vững, thực thi đa provider tự động và Critic loop vẫn chưa triển khai.  
+**Trạng thái:** Đã triển khai một phần lớp phân công/chuyển giao thủ công và các primitive thuần cho kiểm tra kế hoạch, dependency, approval gate, trạng thái task. Worker gọi AI ngoài, hàng đợi bền vững, thực thi đa provider tự động, lưu output và Critic loop vẫn chưa triển khai.  
 **Phạm vi:** Giai đoạn 2; backend-first, provider-agnostic, ưu tiên model miễn phí.  
 **Nguyên tắc:** Không tự thực thi hành động bên ngoài, không gọi model trả phí, không ghi đè dữ liệu gốc khi chưa được duyệt.
 
 ## 1. Mục tiêu và ranh giới
+
+### Phần lõi đã được thêm trên nhánh phát triển
+
+`src/lib/orchestrator/core.ts` cung cấp các hàm thuần, chưa được nối vào runtime: kiểm tra schema/version và giới hạn số task; kiểm tra ID trùng, dependency không tồn tại, self-dependency và chu trình; xác định task đủ điều kiện dispatch khi dependency đã `succeeded` và approval đã được cấp; kiểm soát chuyển trạng thái theo allowlist và policy; approval/review evidence phải được server resolve, gắn task revision/hash, có timestamp hợp lệ và không bị revoke. Validator trả canonical plan đã loại trừ unknown properties. Runtime primitive chỉ kiểm tra binding của evidence, không tự xác thực danh tính hay quyền; worker bắt buộc lấy evidence từ persistence/authorization layer đáng tin cậy. Unit tests tương ứng được đưa vào `test:ci`. Các primitive này không gọi provider, không ghi DB, không tạo queue và không tự chạy task.
+
+Nhánh triển khai phải giữ feature chưa bật mặc định cho đến khi có persistence, worker, provider adapter, auth/approval gate và kiểm thử tích hợp.
 
 ### Trạng thái runtime hiện tại
 
@@ -24,8 +30,9 @@ Phân biệt trạng thái:
 - queued: đủ điều kiện vào hàng đợi.
 - dispatched: request đã gửi tới provider.
 - running: request thực sự đang xử lý.
-- succeeded: output hợp lệ đã lưu.
+- execution_succeeded: provider execution đã hoàn tất và output đã lưu, chưa đồng nghĩa được nghiệm thu.
 - review_required: cần người xem xét.
+- succeeded: task đã được chấp nhận/nghiệm thu.
 - failed/cancelled/retry_wait: lỗi, đã hủy hoặc chờ retry.
 
 Gán task cho một vai trò AI nội bộ không đồng nghĩa AI bên ngoài đã thực thi. Không hiển thị “Đang chạy” nếu chưa có request thực.
@@ -35,8 +42,8 @@ Gán task cho một vai trò AI nội bộ không đồng nghĩa AI bên ngoài 
 ```ts
 type TaskStatus =
   | "planned" | "needs_approval" | "queued" | "dispatched"
-  | "running" | "succeeded" | "failed" | "cancelled"
-  | "retry_wait" | "review_required";
+  | "running" | "execution_succeeded" | "review_required"
+  | "succeeded" | "failed" | "cancelled" | "retry_wait";
 
 type TaskRole =
   | "researcher" | "planner" | "implementer" | "critic" | "synthesizer";
@@ -65,9 +72,23 @@ type OrchestratedTask = {
   };
   approval: {
     required: boolean;
+    approvalId: string | null;
+    taskRevision: number | null;
+    taskHash: string | null;
     approvedAt: string | null;
     approvedBy: string | null;
+    scope: "execute" | null;
+    revokedAt: string | null;
   };
+  review: {
+    required: boolean;
+    reviewId: string | null;
+    taskRevision: number | null;
+    taskHash: string | null;
+    reviewerId: string | null;
+    reviewedAt: string | null;
+    verdict: "accepted" | "revise" | "rejected" | null;
+  } | null;
   input: { summary: string; artifactRefs: string[] };
   output: { summary: string; artifactRefs: string[] } | null;
   error: { code: string; safeMessage: string } | null;
