@@ -16,9 +16,10 @@ export const sendAiMessage = createServerFn({ method: "POST" })
 
 export const checkAiConnection = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .handler(async () => {
-    const { testAiConnection, toPublicAiError } = await import("./ai.server");
+  .handler(async ({ context }) => {
+    const { assertLiveDiagnosticsAllowed, testAiConnection, toPublicAiError } = await import("./ai.server");
     try {
+      assertLiveDiagnosticsAllowed(context.userId);
       return await testAiConnection();
     } catch (error) {
       throw toPublicAiError(error);
