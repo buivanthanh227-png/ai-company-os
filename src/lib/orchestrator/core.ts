@@ -238,7 +238,17 @@ export function isTaskDispatchable(
   if (!isRuntimeTaskShape(task) || task.status !== "queued") return false;
   if (!Array.isArray(allTasks) || !allTasks.every(isRuntimeTaskShape)) return false;
   if (new Set(allTasks.map((item) => item.id)).size !== allTasks.length) return false;
-  if (!allTasks.some((item) => item.id === task.id)) return false;
+  const canonicalTask = allTasks.find((item) => item.id === task.id);
+  if (
+    !canonicalTask ||
+    canonicalTask.revision !== task.revision ||
+    canonicalTask.contentHash !== task.contentHash ||
+    canonicalTask.status !== task.status ||
+    canonicalTask.approvalRequired !== task.approvalRequired ||
+    canonicalTask.reviewRequired !== task.reviewRequired ||
+    canonicalTask.dependsOn.length !== task.dependsOn.length ||
+    canonicalTask.dependsOn.some((id, index) => id !== task.dependsOn[index])
+  ) return false;
   if (task.approvalRequired && (
     !Array.isArray(approvals) ||
     !approvals.some((approval) => matchesApproval(task, approval, nowMs))
