@@ -149,8 +149,12 @@ export function SettingsView() {
           ? "Chưa cấu hình GEMINI_API_KEY hoặc OPENROUTER_API_KEY trong Vercel."
           : message === "Unauthorized"
             ? "Cần đăng nhập hợp lệ trước khi gọi AI."
-            : message === "AI_PROVIDER_RATE_LIMITED"
-              ? "Provider đang giới hạn tần suất; hãy thử lại sau."
+            : message === "AI_DIAGNOSTICS_FORBIDDEN"
+              ? "Kiểm tra API thật đang bị khóa. Chỉ tài khoản được chủ sở hữu cho phép và bật cờ máy chủ mới được gửi request."
+              : message === "AI_DIAGNOSTICS_RATE_LIMITED"
+                ? "Vừa kiểm tra kết nối gần đây. Vui lòng chờ ít nhất 60 giây."
+                : message === "AI_PROVIDER_RATE_LIMITED"
+                  ? "Provider đang giới hạn tần suất; hãy thử lại sau."
               : message === "AI_PROVIDER_AUTH_FAILED"
                 ? "Provider từ chối xác thực; quản trị viên cần kiểm tra cấu hình."
                 : message === "AI_PROVIDER_TIMEOUT"
@@ -234,7 +238,7 @@ export function SettingsView() {
               </div>
             ))}
           </div>
-          <p className="text-xs text-faint">Không có API key hoặc secret nào được gửi về trình duyệt. DeepSeek/Groq chỉ được tự động dùng làm tuyến dự phòng khi đã có key, model và bật cờ AI_ENABLE_DEEPSEEK_FALLBACK / AI_ENABLE_GROQ_FALLBACK. Hai cờ này mặc định tắt để tránh phát sinh chi phí ngoài dự kiến.</p>
+          <p className="text-xs text-faint">Không có API key hoặc secret nào được gửi về trình duyệt. DeepSeek/Groq chỉ được tự động dùng làm tuyến dự phòng khi đã có key, model và bật cờ AI_ENABLE_DEEPSEEK_FALLBACK / AI_ENABLE_GROQ_FALLBACK. Hai cờ này mặc định tắt. Request kiểm tra thật chỉ dành cho user ID nằm trong AI_DIAGNOSTICS_ALLOWED_USER_IDS khi AI_ALLOW_LIVE_DIAGNOSTICS=true; mỗi user bị giới hạn một lần trong 60 giây.</p>
           <div className="flex flex-wrap items-center gap-3">
             <Button onClick={runAiCheck} disabled={aiChecking}>{aiChecking ? "Đang kiểm tra..." : "Gửi request kiểm tra kết nối thật"}</Button>
             {aiStatus ? <p className="text-sm font-medium text-ok">{aiStatus}</p> : null}
