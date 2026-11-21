@@ -313,7 +313,8 @@ export function ReviewsView() {
     try {
       const { decideProposal: decideProposalOnServer, loadWorkspaceSnapshot, saveWorkspaceSnapshot } = await import("@/lib/workspace.functions");
       const { getSnapshot } = await import("@/lib/store");
-      await saveWorkspaceSnapshot({ data: { snapshot: getSnapshot() } });
+      const saved = await saveWorkspaceSnapshot({ data: { snapshot: getSnapshot() } });
+      useOs.getState().setWorkspaceVersion(saved.version);
       await decideProposalOnServer({ data: { proposalId, action: accept ? "approved" : "rejected" } });
       const snapshot = await loadWorkspaceSnapshot();
       if (snapshot) useOs.getState().importSnapshot(snapshot);
