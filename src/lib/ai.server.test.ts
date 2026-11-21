@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { postJson, runAiChat, toPublicAiError } from "./ai.server.ts";
+import { getAiProviderReadiness, postJson, runAiChat, toPublicAiError } from "./ai.server.ts";
 
 const originalFetch = globalThis.fetch;
 const diagnostic = { provider: "gemini" as const, model: "test-model" };
@@ -283,4 +283,43 @@ test("maps provider failures to safe public error codes", () => {
     toPublicAiError(Object.assign(new Error("unauthorized"), { status: 401 })).message,
     "AI_PROVIDER_AUTH_FAILED",
   );
+});
+
+
+test("reports provider configuration without exposing keys or claiming connectivity", () => {
+  const previous = {
+    gemini: process.env.GEMINI_API_KEY,
+    deepseek: process.env.DEEPSEEK_API_KEY,
+    groq: process.env.GROQ_API_KEY,
+    openrouter: process.env.OPENROUTER_API_KEY,
+  };
+  process.env.GEMINI_API_KEY = "test-gemini-key";
+  process.env.DEEPSEEK_API_KEY = "test-deepseek-key";
+  delete process.env.GROQ_API_KEY;
+  process.env.OPENROUTER_API_KEY = "test-openrouter-key";
+
+  try {
+    const status = getAiProviderReadiness();
+    assert.deepEqual(
+      status.map(({ provider, configured, adapterImplemented, connectivity }) => ({
+        provider, configured, adapterImplemented, connectivity,
+      })),
+      [
+        { provider: "gemini", configured: true, adapterImplemented: true, connectivity: "not_checked" },
+        { provider: "deepseek", configured: true, adapterImplemented: false, connectivity: "not_checked" },
+        { provider: "groq", configured: false, adapterImplemented: false, connectivity: "not_checked" },
+        { provider: "openrouter", configured: true, adapterImplemented: true, connectivity: "not_checked" },
+      ],
+    );
+    assert.equal(JSON.stringify(status).includes("test-gemini-key"), false);
+  } finally {
+    if (previous.gemini === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = previous.gemini;
+    if (previous.deepseek === undefined) delete process.env.DEEPSEEK_API_KEY;
+    else process.env.DEEPSEEK_API_KEY = previous.deepseek;
+    if (previous.groq === undefined) delete process.env.GROQ_API_KEY;
+    else process.env.GROQ_API_KEY = previous.groq;
+    if (previous.openrouter === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = previous.openrouter;
+  }
 });
