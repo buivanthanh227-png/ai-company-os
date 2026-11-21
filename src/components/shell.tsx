@@ -137,6 +137,12 @@ export function Shell({ search, children }: { search: AppSearch; children: React
     let unsubscribe: (() => void) | undefined;
     let saveTimer: number | undefined;
 
+    const snapshotContent = (snapshot = getSnapshot()) => {
+      const content = { ...snapshot };
+      delete content.workspaceVersion;
+      return JSON.stringify(content);
+    };
+
     const syncWorkspace = async () => {
       await Promise.resolve(useOs.persist.rehydrate());
       try {
@@ -146,24 +152,40 @@ export function Shell({ search, children }: { search: AppSearch; children: React
         if (remote) {
           useOs.getState().importSnapshot(remote);
         } else {
-          await saveWorkspaceSnapshot({ data: { snapshot: getSnapshot() } });
+          const saved = await saveWorkspaceSnapshot({ data: { snapshot: getSnapshot() } });
+          useOs.getState().setWorkspaceVersion(saved.version);
         }
 
-        let previous = JSON.stringify(getSnapshot());
+        let previous = snapshotContent();
         unsubscribe = useOs.subscribe(() => {
           if (!active) return;
-          const next = JSON.stringify(getSnapshot());
+          const next = snapshotContent();
           if (next === previous) return;
           previous = next;
           if (saveTimer !== undefined) window.clearTimeout(saveTimer);
           saveTimer = window.setTimeout(() => {
-            void saveWorkspaceSnapshot({ data: { snapshot: getSnapshot() } }).catch(() => {
-              useOs.getState().setNotice("Không đồng bộ được dữ liệu lên máy chủ. Dữ liệu trên trình duyệt vẫn còn.");
-            });
+            void (async () => {
+              try {
+                const saved = await saveWorkspaceSnapshot({ data: { snapshot: getSnapshot() } });
+                if (active) useOs.getState().setWorkspaceVersion(saved.version);
+              } catch (error) {
+                const message = error instanceof Error ? error.message : "";
+                if (message.includes("WORKSPACE_VERSION_CONFLICT")) {
+                  const latest = await loadWorkspaceSnapshot();
+                  if (latest && active) {
+                    previous = snapshotContent(latest);
+                    useOs.getState().importSnapshot(latest);
+                    useOs.getState().setNotice("Dữ liệu đã được cập nhật ở tab hoặc thiết bị khác. Đã tải phiên bản mới nhất; hãy nhập lại thay đổi chưa đồng bộ.");
+                    return;
+                  }
+                }
+                if (active) useOs.getState().setNotice("Không đồng bộ được dữ liệu lên máy chủ. Dữ liệu trên trình duyệt vẫn còn.");
+              }
+            })();
           }, 900);
         });
       } catch (error) {
-        console.error("[workspace] remote sync unavailable:", error);
+        console.error("[workspace] remote sync unavailable:", error instanceof Error ? error.name : "UnknownError");
         if (active) {
           useOs.getState().setNotice("Chưa kết nối được kho dữ liệu máy chủ. Dữ liệu hiện tại vẫn lưu trên trình duyệt này.");
         }
