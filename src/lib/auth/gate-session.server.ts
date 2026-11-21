@@ -19,6 +19,10 @@ export const GATE_PROVIDER_ID = "grok-gate";
 const GATE_ACCOUNT_ISSUER = "https://grok.com";
 const LOG = "[gate-identity]";
 
+function safeErrorType(error: unknown): string {
+  return error instanceof Error ? error.name.slice(0, 64) : "UnknownError";
+}
+
 type GateAccount = Parameters<typeof handleOAuthUserInfo>[1]["account"];
 
 /**
