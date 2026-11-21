@@ -42,8 +42,8 @@ Gán task cho một vai trò AI nội bộ không đồng nghĩa AI bên ngoài 
 ```ts
 type TaskStatus =
   | "planned" | "needs_approval" | "queued" | "dispatched"
-  | "running" | "succeeded" | "failed" | "cancelled"
-  | "retry_wait" | "review_required";
+  | "running" | "execution_succeeded" | "review_required"
+  | "succeeded" | "failed" | "cancelled" | "retry_wait";
 
 type TaskRole =
   | "researcher" | "planner" | "implementer" | "critic" | "synthesizer";
@@ -72,9 +72,23 @@ type OrchestratedTask = {
   };
   approval: {
     required: boolean;
+    approvalId: string | null;
+    taskRevision: number | null;
+    taskHash: string | null;
     approvedAt: string | null;
     approvedBy: string | null;
+    scope: "execute" | null;
+    revokedAt: string | null;
   };
+  review: {
+    required: boolean;
+    reviewId: string | null;
+    taskRevision: number | null;
+    taskHash: string | null;
+    reviewerId: string | null;
+    reviewedAt: string | null;
+    verdict: "accepted" | "revise" | "rejected" | null;
+  } | null;
   input: { summary: string; artifactRefs: string[] };
   output: { summary: string; artifactRefs: string[] } | null;
   error: { code: string; safeMessage: string } | null;
