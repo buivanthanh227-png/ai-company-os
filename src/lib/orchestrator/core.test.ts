@@ -188,6 +188,23 @@ test("runtime dispatch fails closed on malformed graph nodes and duplicate depen
   assert.deepEqual(getDispatchableTasks(null as unknown as RuntimeTask[]), []);
 });
 
+test("runtime dispatch rejects unknown fields and cyclic or malformed dependency graphs", () => {
+  const injected = { ...task("injected"), executionCommand: "untrusted" } as unknown as RuntimeTask;
+  assert.equal(isTaskDispatchable(injected, [injected]), false);
+  assert.deepEqual(getDispatchableTasks([injected]), []);
+
+  const completedCycleNode: RuntimeTask = {
+    ...task("cycle-a", ["cycle-b"]),
+    status: "succeeded",
+  };
+  const queuedCycleNode = task("cycle-b", ["cycle-a"]);
+  assert.equal(isTaskDispatchable(queuedCycleNode, [completedCycleNode, queuedCycleNode]), false);
+  assert.deepEqual(getDispatchableTasks([completedCycleNode, queuedCycleNode]), []);
+
+  const malformedId = { ...task("valid"), id: " " } as unknown as RuntimeTask;
+  assert.equal(isTaskDispatchable(malformedId, [malformedId]), false);
+});
+
 test("terminal states cannot be reopened", () => {
   for (const status of ["succeeded", "failed", "cancelled"] as const) {
     assert.equal(canTransitionTaskStatus(status, "queued"), false);
