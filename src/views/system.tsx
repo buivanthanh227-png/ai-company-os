@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/bits";
 import { Button, Field, Panel, TextInput } from "@/components/ui";
 import { catalogRows } from "@/lib/catalog";
@@ -6,7 +6,7 @@ import { when } from "@/lib/format";
 import { useOs, useRoster } from "@/lib/store";
 import type { Snapshot } from "@/lib/store";
 import { buildXlsx, downloadBlob, toCsv } from "@/lib/xlsx";
-import { checkAiConnection } from "@/lib/ai.functions";
+import { checkAiConnection, getAiProviderReadiness } from "@/lib/ai.functions";
 
 const DOCS = [
   {
@@ -109,6 +109,25 @@ export function SettingsView() {
   const [aiChecking, setAiChecking] = useState(false);
   const [aiStatus, setAiStatus] = useState("");
   const [aiError, setAiError] = useState("");
+  const [providerReadiness, setProviderReadiness] = useState<Array<{
+    provider: "gemini" | "deepseek" | "groq" | "openrouter";
+    configured: boolean;
+    adapterImplemented: boolean;
+    connectivity: "not_checked";
+  }>>([]);
+  const [readinessError, setReadinessError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    void getAiProviderReadiness()
+      .then((status) => {
+        if (active) setProviderReadiness(status);
+      })
+      .catch(() => {
+        if (active) setReadinessError("Không tải được trạng thái cấu hình từ máy chủ.");
+      });
+    return () => { active = false; };
+  }, []);
 
   async function runAiCheck() {
     setAiChecking(true);
@@ -189,13 +208,24 @@ export function SettingsView() {
           </label>
         </Panel>
         <Panel className="flex flex-col gap-3 xl:col-span-2">
-          <h2 className="text-sm font-medium">Gemini Router · kiểm tra kết nối thật</h2>
-          <p className="text-sm text-muted">Ưu tiên Google Gemini. Khi Gemini gặp lỗi mạng, timeout, giới hạn tần suất hoặc lỗi máy chủ, hệ thống thử OpenRouter nếu đã cấu hình. Khóa không được lưu trong trình duyệt.</p>
-          <p className="text-xs text-faint">Vercel Environment Variables: GEMINI_API_KEY, OPENROUTER_API_KEY. Có thể đặt GEMINI_MODEL và OPENROUTER_MODEL để chọn model.</p>
+          <h2 className="text-sm font-medium">Trạng thái Provider API</h2>
+          <p className="text-sm text-muted">Thông tin cấu hình chỉ phản ánh biến môi trường có tồn tại; không chứng minh API key hợp lệ hoặc provider đang hoạt động. Kiểm tra kết nối là một request API thật và có thể tiêu hao quota hoặc phát sinh chi phí.</p>
+          {readinessError ? <p role="alert" className="text-sm text-danger">{readinessError}</p> : null}
+          <div className="grid gap-2 sm:grid-cols-2">
+            {providerReadiness.map((item) => (
+              <div key={item.provider} className="rounded-lg border border-line p-3">
+                <p className="text-sm font-medium capitalize">{item.provider === "gemini" ? "Google Gemini" : item.provider === "deepseek" ? "DeepSeek" : item.provider === "groq" ? "Groq" : "OpenRouter"}</p>
+                <p className="mt-1 text-xs text-muted">API key: {item.configured ? "Đã cấu hình" : "Chưa cấu hình"}</p>
+                <p className="text-xs text-muted">Adapter: {item.adapterImplemented ? "Đã triển khai" : "Chưa triển khai"}</p>
+                <p className="text-xs text-muted">Kết nối: Chưa kiểm tra</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-faint">Không có API key hoặc secret nào được gửi về trình duyệt. DeepSeek/Groq có thể đã có biến môi trường nhưng hiện chưa có adapter thực thi.</p>
           <div className="flex flex-wrap items-center gap-3">
-            <Button onClick={runAiCheck} disabled={aiChecking}>{aiChecking ? "Đang kiểm tra..." : "Kiểm tra kết nối AI"}</Button>
+            <Button onClick={runAiCheck} disabled={aiChecking}>{aiChecking ? "Đang kiểm tra..." : "Gửi request kiểm tra kết nối thật"}</Button>
             {aiStatus ? <p className="text-sm font-medium text-ok">{aiStatus}</p> : null}
-            {aiError ? <p className="text-sm text-danger">{aiError}</p> : null}
+            {aiError ? <p role="alert" className="text-sm text-danger">{aiError}</p> : null}
           </div>
         </Panel>
         <Panel>
