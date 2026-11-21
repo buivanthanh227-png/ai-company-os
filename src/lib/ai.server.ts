@@ -243,7 +243,7 @@ const BASE_SYSTEM_INSTRUCTION =
   "Mặc định hãy trả lời trực tiếp câu hỏi, không tự biến mọi yêu cầu thành công việc của công ty, không ép người dùng phải giao việc. " +
   "Hỗ trợ kiến thức phổ thông và chuyên môn, học tập, ngoại ngữ, viết và biên tập, lập kế hoạch cá nhân, phân tích, tư duy, lập trình, sáng tạo và tư vấn thực tế. " +
   "Trả lời bằng ngôn ngữ người dùng đang sử dụng (ưu tiên tiếng Việt khi phù hợp), rõ ràng, chính xác, có chiều sâu tương xứng với câu hỏi; hỏi lại khi thiếu dữ kiện quan trọng. " +
-  "Không tự nhận mình là ChatGPT hay một mô hình cụ thể; danh tính nhà cung cấp/model thực tế được giao diện hiển thị riêng. " +
+  "Không tự nhận mình là ChatGPT hay một mô hình cụ thể; nếu được hỏi về danh tính, hãy giới thiệu mình là trợ lý AI của AI COMPANY OS và không phủ nhận metadata provider/model do hệ thống hiển thị. " +
   "Khi người dùng hỏi về AI COMPANY OS hoặc dữ liệu điều hành, hãy sử dụng bối cảnh hệ thống nếu được cung cấp; ngoài trường hợp đó, không tự đưa nội dung công ty vào câu trả lời. " +
   "Phân biệt thông tin đã xác minh, suy luận và đề xuất. Không tuyên bố đã sửa mã, tạo PR, triển khai, gửi thông tin hoặc gọi công cụ nếu hành động đó chưa thực sự được thực hiện. " +
   "Bạn không có quyền tự thay đổi dữ liệu hay thực thi tác vụ thông qua cuộc trò chuyện này trừ khi công cụ tương ứng được cung cấp và xác nhận đã chạy. " +
@@ -278,7 +278,6 @@ async function callGemini(input: AiChatInput): Promise<AiReply> {
     "gemini-3.8-flash",
   ].filter((m, i, arr): m is string => Boolean(m) && arr.indexOf(m) === i);
 
-  const failures: string[] = [];
   let lastFailure: ProviderFailure | undefined;
 
   for (const model of candidates) {
@@ -307,12 +306,11 @@ async function callGemini(input: AiChatInput): Promise<AiReply> {
         return { text, provider: "gemini", model, fallbackUsed: false };
       }
       lastFailure = providerFailure("Provider returned an empty response");
-      failures.push(`${model}: empty response`);
+      // Empty output is a provider failure; keep only its safe classification.
     } catch (err) {
       const failure = err as ProviderFailure;
       lastFailure = failure;
-      const status = failure.status ? ` (HTTP ${failure.status})` : "";
-      failures.push(`${model}: ${failure.message}${status}`);
+      // Keep detailed provider diagnostics server-side only.
       // Authentication/permission errors apply to the key, not the model.
       // A malformed request also will not improve by trying another model.
       if (failure.status === 400 || failure.status === 401 || failure.status === 403) {
@@ -397,6 +395,24 @@ export async function runAiChat(rawInput: unknown): Promise<AiReply> {
       );
     }
   }
+}
+
+
+export type AiProviderReadiness = {
+  provider: "gemini" | "deepseek" | "groq" | "openrouter";
+  configured: boolean;
+  adapterImplemented: boolean;
+  connectivity: "not_checked";
+};
+
+/** Metadata-only readiness check. Never returns secrets or calls provider APIs. */
+export function getAiProviderReadiness(): AiProviderReadiness[] {
+  return [
+    { provider: "gemini", configured: Boolean(env("GEMINI_API_KEY")), adapterImplemented: true, connectivity: "not_checked" },
+    { provider: "deepseek", configured: Boolean(env("DEEPSEEK_API_KEY")), adapterImplemented: false, connectivity: "not_checked" },
+    { provider: "groq", configured: Boolean(env("GROQ_API_KEY")), adapterImplemented: false, connectivity: "not_checked" },
+    { provider: "openrouter", configured: Boolean(env("OPENROUTER_API_KEY")), adapterImplemented: true, connectivity: "not_checked" },
+  ];
 }
 
 export async function testAiConnection(): Promise<Omit<AiReply, "text">> {
