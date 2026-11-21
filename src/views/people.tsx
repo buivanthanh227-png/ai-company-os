@@ -300,16 +300,45 @@ export function ReviewsView() {
   const setSkill = useOs((state) => state.setSkill);
   const propose = useOs((state) => state.propose);
   const proposals = useOs((state) => state.proposals);
-  const decide = useOs((state) => state.decideProposal);
+  const setNotice = useOs((state) => state.setNotice);
+  const [decisionBusy, setDecisionBusy] = useState(false);
   const [id, setId] = useState(roster[0]?.id ?? "");
   const person = roster.find((item) => item.id === id) ?? roster[0];
   const [rank, setRank] = useState<Rank>("lead");
   const [title, setTitle] = useState("Trưởng phòng");
   const [reason, setReason] = useState("");
+
+  async function decideOnServer(proposalId: string, accept: boolean) {
+    setDecisionBusy(true);
+    try {
+      const { decideProposal: decideProposalOnServer, loadWorkspaceSnapshot, saveWorkspaceSnapshot } = await import("@/lib/workspace.functions");
+      const { getSnapshot } = await import("@/lib/store");
+      await saveWorkspaceSnapshot({ data: { snapshot: getSnapshot() } });
+      await decideProposalOnServer({ data: { proposalId, action: accept ? "approved" : "rejected" } });
+      const snapshot = await loadWorkspaceSnapshot();
+      if (snapshot) useOs.getState().importSnapshot(snapshot);
+      setNotice(accept ? "Quyết định duyệt đã được lưu và xác thực phía máy chủ." : "Quyết định bác đã được lưu phía máy chủ.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      setNotice(
+        message.includes("OWNER_IDENTITY_NOT_UNIQUE")
+          ? "Không thể phê duyệt bằng danh tính dev-user dùng chung. Cần phiên đăng nhập có user ID riêng."
+          : message.includes("OWNER_AUTHORIZATION_NOT_CONFIGURED")
+            ? "Chưa cấu hình AI_COMPANY_OWNER_USER_IDS trên máy chủ; thao tác bị khóa an toàn."
+            : message.includes("OWNER_FORBIDDEN")
+              ? "Tài khoản hiện tại không có quyền owner."
+              : message.includes("PROPOSAL_ALREADY_DECIDED")
+                ? "Đề xuất này đã có quyết định trước đó và không thể phát lại."
+                : "Không thể ghi nhận quyết định. Đề xuất vẫn giữ nguyên trạng thái.";
+    } finally {
+      setDecisionBusy(false);
+    }
+  }
+
   if (!person) return null;
   return (
     <div>
-      <PageHeader kicker="Đánh giá" title="Kiểm tra và điều chuyển" lede="CEO chỉ được đề xuất. Chủ tịch phê duyệt thì chức vụ mới ghi vào hồ sơ." />
+      <PageHeader kicker="Đánh giá" title="Kiểm tra và điều chuyển" lede="CEO chỉ được đề xuất. Quyết định chỉ có hiệu lực khi backend xác thực owner và lưu audit record; client snapshot không thể tự duyệt." />
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <Panel>
           <Field label="Nhân sự">
@@ -352,6 +381,7 @@ export function ReviewsView() {
           </Panel>
           <Panel>
             <h2 className="text-sm font-medium">Hàng duyệt</h2>
+            <p className="mt-1 text-xs text-faint">Phê duyệt yêu cầu user ID riêng và AI_COMPANY_OWNER_USER_IDS trên máy chủ. Danh tính dev-user dùng chung luôn bị từ chối.</p>
             {proposals.length === 0 ? <p className="mt-2 text-sm text-muted">Chưa có đề xuất.</p> : null}
             <ul className="mt-2 flex flex-col gap-3">
               {proposals.map((item) => {
@@ -359,11 +389,11 @@ export function ReviewsView() {
                 return (
                   <li key={item.id} className="border-t border-line pt-2 text-sm">
                     <p>{who?.name ?? item.staffId} → {item.title}</p>
-                    <p className="text-xs text-faint">{item.reason || "Không có lý do"} · {item.status === "approved" ? "Đã duyệt" : item.status === "rejected" ? "Đã bác" : "Chờ duyệt"}</p>
+                    <p className="text-xs text-faint">{item.reason || "Không có lý do"} · {item.status === "approved" ? "Đã duyệt phía máy chủ" : item.status === "rejected" ? "Đã bác phía máy chủ" : "Chờ duyệt"}</p>
                     {item.status === "pending" ? (
                       <div className="mt-2 flex gap-2">
-                        <Button onClick={() => decide(item.id, true)}>Duyệt</Button>
-                        <Button variant="danger" onClick={() => decide(item.id, false)}>Bác</Button>
+                        <Button onClick={() => void decideOnServer(item.id, true)} disabled={decisionBusy}>Duyệt phía máy chủ</Button>
+                        <Button variant="danger" onClick={() => void decideOnServer(item.id, false)} disabled={decisionBusy}>Bác phía máy chủ</Button>
                       </div>
                     ) : null}
                   </li>
