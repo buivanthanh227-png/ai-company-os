@@ -23,6 +23,10 @@ export type ValidationResult =
 
 const ROLES = new Set<TaskRole>(["researcher", "planner", "implementer", "critic", "synthesizer"]);
 const PROVIDERS = new Set<TaskProvider>(["gemini", "openrouter", "manual"]);
+const STATUSES = new Set<OrchestratorStatus>([
+  "planned", "needs_approval", "queued", "dispatched", "running",
+  "execution_succeeded", "review_required", "succeeded", "failed", "cancelled", "retry_wait",
+]);
 const PLAN_KEYS = new Set(["schemaVersion", "objective", "tasks"]);
 const TASK_KEYS = new Set(["id", "title", "objective", "role", "provider", "dependsOn"]);
 
@@ -164,8 +168,23 @@ export type RuntimeTask = {
 };
 
 function isValidTimestamp(value: string, nowMs: number): boolean {
+  if (typeof value !== "string") return false;
   const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) && timestamp <= nowMs;
+  return Number.isFinite(timestamp) &&
+    new Date(timestamp).toISOString() === value &&
+    timestamp <= nowMs;
+}
+
+function isRuntimeTaskShape(value: unknown): value is RuntimeTask {
+  if (!isRecord(value)) return false;
+  return typeof value.id === "string" && value.id.length > 0 &&
+    Number.isInteger(value.revision) && (value.revision as number) >= 1 &&
+    typeof value.contentHash === "string" && value.contentHash.length > 0 &&
+    typeof value.status === "string" && STATUSES.has(value.status as OrchestratorStatus) &&
+    Array.isArray(value.dependsOn) && value.dependsOn.every((id) => typeof id === "string") &&
+    new Set(value.dependsOn).size === value.dependsOn.length &&
+    typeof value.approvalRequired === "boolean" &&
+    typeof value.reviewRequired === "boolean";
 }
 
 /**
@@ -217,14 +236,8 @@ export function isTaskDispatchable(
   nowMs = Date.now(),
 ): boolean {
   if (task.status !== "queued") return false;
-  if (
-    typeof task.id !== "string" || !task.id ||
-    typeof task.approvalRequired !== "boolean" || typeof task.reviewRequired !== "boolean" ||
-    !Array.isArray(task.dependsOn) || !task.dependsOn.every((id) => typeof id === "string") ||
-    !Number.isInteger(task.revision) || task.revision < 1 ||
-    typeof task.contentHash !== "string" || !task.contentHash
-  ) return false;
-  if (!Array.isArray(allTasks) || allTasks.some((item) => !item || typeof item.id !== "string")) return false;
+  if (!isRuntimeTaskShape(task)) return false;
+  if (!Array.isArray(allTasks) || !allTasks.every(isRuntimeTaskShape)) return false;
   if (new Set(allTasks.map((item) => item.id)).size !== allTasks.length) return false;
   if (!allTasks.some((item) => item.id === task.id)) return false;
   if (task.approvalRequired && !approvals.some((approval) => matchesApproval(task, approval, nowMs))) return false;
@@ -237,6 +250,7 @@ export function getDispatchableTasks(
   approvals: readonly ApprovalEvidence[] = [],
   nowMs = Date.now(),
 ): RuntimeTask[] {
+  if (!Array.isArray(tasks) || !tasks.every(isRuntimeTaskShape)) return [];
   if (new Set(tasks.map((task) => task.id)).size !== tasks.length) return [];
   return tasks.filter((task) => isTaskDispatchable(task, tasks, approvals, nowMs));
 }
