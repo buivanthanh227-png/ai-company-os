@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { getAiProviderReadiness, postJson, runAiChat, toPublicAiError } from "./ai.server.ts";
+import { assertLiveDiagnosticsAllowed, getAiProviderReadiness, postJson, runAiChat, toPublicAiError } from "./ai.server.ts";
 
 const originalFetch = globalThis.fetch;
 const diagnostic = { provider: "gemini" as const, model: "test-model" };
@@ -450,5 +450,33 @@ test("does not call configured DeepSeek or Groq keys unless fallback flags are e
       if (previous[name] === undefined) delete process.env[name];
       else process.env[name] = previous[name];
     }
+  }
+});
+
+
+test("live provider diagnostics require explicit opt-in and an owner allowlist", () => {
+  const previousEnabled = process.env.AI_ALLOW_LIVE_DIAGNOSTICS;
+  const previousUsers = process.env.AI_DIAGNOSTICS_ALLOWED_USER_IDS;
+  delete process.env.AI_ALLOW_LIVE_DIAGNOSTICS;
+  delete process.env.AI_DIAGNOSTICS_ALLOWED_USER_IDS;
+  assert.throws(() => assertLiveDiagnosticsAllowed("diagnostics-owner-a"), {
+    message: "AI_DIAGNOSTICS_FORBIDDEN",
+  });
+
+  process.env.AI_ALLOW_LIVE_DIAGNOSTICS = "true";
+  process.env.AI_DIAGNOSTICS_ALLOWED_USER_IDS = "diagnostics-owner-a, diagnostics-owner-b";
+  try {
+    assert.doesNotThrow(() => assertLiveDiagnosticsAllowed("diagnostics-owner-a", 1_000_000));
+    assert.throws(() => assertLiveDiagnosticsAllowed("diagnostics-owner-a", 1_000_001), {
+      message: "AI_DIAGNOSTICS_RATE_LIMITED",
+    });
+    assert.throws(() => assertLiveDiagnosticsAllowed("not-an-owner", 1_000_000), {
+      message: "AI_DIAGNOSTICS_FORBIDDEN",
+    });
+  } finally {
+    if (previousEnabled === undefined) delete process.env.AI_ALLOW_LIVE_DIAGNOSTICS;
+    else process.env.AI_ALLOW_LIVE_DIAGNOSTICS = previousEnabled;
+    if (previousUsers === undefined) delete process.env.AI_DIAGNOSTICS_ALLOWED_USER_IDS;
+    else process.env.AI_DIAGNOSTICS_ALLOWED_USER_IDS = previousUsers;
   }
 });
